@@ -293,7 +293,7 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 
     <!-- Filter Tabs -->
     <div class="ftabs" id="ftabs">
-      <div class="ftab on" onclick="setFilter('all',this)"><span class="ficon">🔬</span> جميع الفلاتر <span class="fbadge" id="fb-all">0</span></div>
+      <div class="ftab on" id="ftab-all" onclick="setFilter('all',this)"><span class="ficon">🔬</span> جميع الفلاتر <span class="fbadge" id="fb-all">0</span></div>
       <div class="ftab" onclick="setFilter('vz',this)"><span class="ficon">💧</span> انحراف السيولة</div>
       <div class="ftab" onclick="setFilter('ma',this)"><span class="ficon">🚀</span> تسارع الزخم</div>
       <div class="ftab" onclick="setFilter('rs',this)"><span class="ficon">💪</span> القوة النسبية</div>
@@ -633,7 +633,72 @@ const NAMES={
 '9521':'إنمار العقارية',
 '9535':'لدن للاستثمار',
 '9610':'الجادة الأولى العقارية',
-'9640':'أساس مكين العقارية'
+'9640':'أساس مكين العقارية',
+/* Added — previously missing from search (were not in NAMES at all, so no
+   amount of "search regardless of score" logic could ever surface them).
+   Cross-checked against a live Tadawul listings pull; 3001 (أسمنت حائل) is
+   intentionally excluded since it was delisted in June 2024. */
+'3050':'أسمنت الجنوب',
+'3060':'أسمنت ينبع',
+'3080':'أسمنت الشرقية',
+'3090':'أسمنت تبوك',
+'3091':'أسمنت الجوف',
+'3092':'أسمنت الرياض',
+'4006':'أسواق المزرعة',
+'4008':'ساكو',
+'4011':'لازوردي',
+'4012':'الأصيل',
+'4014':'دار المعدات الطبية',
+'4040':'سابتكو',
+'4051':'باعظيم',
+'4061':'أنعام القابضة',
+'4070':'تهامة',
+'4110':'باتك',
+'4140':'صادرات',
+'4141':'العمران',
+'4160':'ثمار',
+'4162':'المنجم',
+'4170':'شمس',
+'4180':'مجموعة فتيحي',
+'4191':'أبو معطي',
+'4192':'السيف غاليري',
+'4230':'البحر الأحمر العالمية',
+'4240':'سينومي ريتيل',
+'4270':'طباعة وتغليف',
+'4290':'الخليج للتدريب والتعليم',
+'4292':'عطاء التعليمية',
+'4331':'الجزيرة ريت',
+'4332':'جدوى ريت الحرمين',
+'4334':'المعذر ريت',
+'4335':'مشاركة ريت',
+'4337':'العزيزية ريت',
+'4346':'ميفك ريت',
+'6001':'حلواني إخوان',
+'6002':'هرفي للأغذية',
+'6012':'ريدان',
+'6013':'الأعمال التطويرية الغذائية',
+'6014':'الآمار الغذائية',
+'6015':'أمريكانا',
+'6020':'جاكو',
+'6040':'تبوك الزراعية',
+'6050':'الأسماك',
+'6060':'الشرقية للتنمية',
+'6070':'الجوف',
+'6090':'جازادكو',
+'7040':'قو للاتصالات',
+'7201':'بحر العرب',
+'7204':'توبي',
+'8050':'سلامة للتأمين',
+'8100':'سايكو',
+'8150':'أسيج للتأمين',
+'8160':'التأمين العربية التعاونية',
+'8170':'الاتحاد للتأمين التعاوني',
+'8180':'الصقر للتأمين',
+'8190':'المتحدة للتأمين التعاوني',
+'8260':'الخليجية العامة للتأمين',
+'8270':'بروج للتأمين',
+'8310':'أمانة للتأمين التعاوني',
+'8311':'عناية للتأمين'
 };
 const SEC={'1':'مصارف وخدمات مالية','2':'صناعة وبتروكيماويات','3':'إسمنت ومواد بناء','4':'تنويع وصحة وخدمات','5':'طاقة وكهرباء','6':'غذاء وزراعة','7':'اتصالات وتقنية','8':'تأمين','9':'عقارات وإدارة أصول'};
 const STKS=Object.entries(NAMES).map(([s,n])=>({sym:s,name:n,sec:SEC[s[0]]||'أخرى'}));
@@ -691,6 +756,27 @@ function ssClear(){
   document.getElementById('ss-drop').classList.remove('show');
   _ssResults=[];_ssActive=-1;
 }
+function ssJumpToRow(sym){
+  /* Make sure the row is guaranteed to exist under the current filters:
+     switch to "جميع الفلاتر" (unfiltered) and clear any buy/sell/alert-only
+     toggle that could otherwise still hide a stock that didn't meet a
+     condition — the whole point of search is to reach it regardless. */
+  const allTab=document.getElementById('ftab-all');
+  if(allTab && _filter!=='all')setFilter('all',allTab);
+  if(_buyOnly)toggleBuySell('buy',document.getElementById('btn-buy'));
+  if(_sellOnly)toggleBuySell('sell',document.getElementById('btn-sell'));
+  if(_alertOnly)toggleAlertOnly(document.getElementById('btn-alert'));
+  /* If this stock was never included in a full scan, _advData won't have
+     an entry for it and no row will render — compute it on the spot. */
+  if(!_advData.find(d=>d.sym===sym)){
+    const res=calcAllFilters(sym,0);
+    if(res){const s=STKS.find(x=>x.sym===sym);_advData.push({...res,name:s?.name||NAMES[sym]||'',price:G.pr[sym]||0,pct:G.pc[sym]||0});}
+  }
+  _pinnedSym=sym;
+  renderResults();
+  const idx=_visibleSyms.indexOf(sym);
+  if(idx>=0)setFocusedRow(idx);
+}
 function ssPick(sym){
   document.getElementById('ss-input').value=`${sym} — ${NAMES[sym]||''}`;
   document.getElementById('ss-drop').classList.remove('show');
@@ -698,6 +784,7 @@ function ssPick(sym){
   /* Jump straight to the chart/trade-plan for this stock, regardless of
      whether it appeared in any scan, met any score, or passed any filter. */
   selectStock(sym);
+  ssJumpToRow(sym);
   const rp=document.querySelector('.right-panel');
   if(rp)rp.scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -914,7 +1001,7 @@ const Tm=()=>{const d=new Date();return`${String(d.getHours()).padStart(2,'0')}:
 /* ══ STATE ══ */
 const G={sel:'2222',tf:'3mo',tfi:'1d',pr:{},op:{},hi:{},lo:{},vo:{},ch:{},pc:{},cans:{},ind:{},sc:{},ld:new Set(),ldg:new Set(),lwChart:null,cSeries:null,vSeries:null,series:{}};
 let _filter='all',_buyOnly=false,_sellOnly=false,_alertOnly=false,_sortCol='master',_sortDir=-1,_showBearish=false;
-let _visibleSyms=[],_focusedIdx=-1;
+let _visibleSyms=[],_focusedIdx=-1,_pinnedSym=null;
 const TAB_ORDER=['all','vz','ma','rs','sq','ab','fg','hidden','pregap','fvgr','elliott','harmonic','hunter','time','sniper','fib618','master','macd','instvol','revcandle'];
 let _advData=[],_aiOpen=false,_zoomLevel=100;
 let _whyOpen={};
@@ -2258,7 +2345,11 @@ function renderResults(){
   });
 
   const tag=(c,l)=>`<span class="tag tag-${c}">${l}</span>`;
-  const visible=data.slice(0,100);
+  let visible=data.slice(0,100);
+  if(_pinnedSym&&!visible.some(d=>d.sym===_pinnedSym)){
+    const pinIdx=data.findIndex(d=>d.sym===_pinnedSym);
+    if(pinIdx>=0)visible=[data[pinIdx],...visible.slice(0,99)];
+  }
   _visibleSyms=visible.map(d=>d.sym);
   if(_focusedIdx>=_visibleSyms.length)_focusedIdx=_visibleSyms.length?_visibleSyms.length-1:-1;
   const rows=visible.map((d,idx)=>{
