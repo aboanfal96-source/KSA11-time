@@ -1204,7 +1204,16 @@ function detectHarmonic(cs){
      (the whole series/markers draw call fails and nothing appears). */
   for(let xi=0;xi<=zz.length-5;xi++){const X=zz[xi],A=zz[xi+1],B=zz[xi+2],C=zz[xi+3],D=zz[xi+4];const XA=Math.abs(A.p-X.p);if(!XA)continue;const AB=Math.abs(B.p-A.p),BC=Math.abs(C.p-B.p),CD=Math.abs(D.p-C.p);if(!AB||!BC)continue;const rXAB=AB/XA,rABC=BC/AB,rBCD=BC>0?CD/BC:0;for(const[name,xl,xh,al,ah,bl,bh,xdl,xdh,bull]of DEFS){if(rXAB<xl||rXAB>xh||rABC<al||rABC>ah)continue;const bcdOk=rBCD>=bl&&rBCD<=bh,forming=!bcdOk&&rBCD>=bl*0.7;if(!bcdOk&&!forming)continue;const score=100-Math.abs(rXAB-(xl+xh)/2)/(xl+xh)*40-Math.abs(rABC-(al+ah)/2)/(al+ah)*30-Math.abs(rBCD-(bl+bh)/2)/(bl+bh)*30;if(score>bestScore){bestScore=score;const bullish=bull?(D.p<X.p):(D.p>X.p);
     const pts=[{i:X.i,time:cs[X.i].time,price:X.p,label:'X'},{i:A.i,time:cs[A.i].time,price:A.p,label:'A'},{i:B.i,time:cs[B.i].time,price:B.p,label:'B'},{i:C.i,time:cs[C.i].time,price:C.p,label:'C'},{i:D.i,time:cs[D.i].time,price:D.p,label:'D'+(bcdOk?'':' (متوقعة)')}];
-    best={name,sig:bullish?'شراء':'بيع',forming:!bcdOk,completion:bcdOk?100:Math.min(99,Math.round(rBCD/bl*100)),score:Math.round(score),points:pts,why:`نموذج ${name} ${bullish?'صعودي':'هبوطي'} — اكتمال ${bcdOk?100:Math.round(rBCD/bl*100)}% — النسب: XAB=${rXAB.toFixed(3)} ABC=${rABC.toFixed(3)} BCD=${rBCD.toFixed(3)}`};}}}
+    /* Reversal targets measured from D — standard harmonic trade management:
+       T1/T2 = partial retracements of the CD leg back toward C, T3 = full
+       retracement back to A. SL = beyond X with a small buffer. */
+    const cdLen=C.p-D.p;
+    const t1=D.p+0.382*cdLen,t2=D.p+0.618*cdLen,t3=A.p;
+    const xaBuf=Math.abs(A.p-X.p)*0.06;
+    const sl=bullish?X.p-xaBuf:X.p+xaBuf;
+    best={name,sig:bullish?'شراء':'بيع',forming:!bcdOk,completion:bcdOk?100:Math.min(99,Math.round(rBCD/bl*100)),score:Math.round(score),points:pts,
+      targets:{t1:+t1.toFixed(2),t2:+t2.toFixed(2),t3:+t3.toFixed(2),sl:+sl.toFixed(2),bullish},
+      why:`نموذج ${name} ${bullish?'صعودي':'هبوطي'} — اكتمال ${bcdOk?100:Math.round(rBCD/bl*100)}% — النسب: XAB=${rXAB.toFixed(3)} ABC=${rABC.toFixed(3)} BCD=${rBCD.toFixed(3)}`};}}}
   /* If the pattern is still forming (D not yet printed), extend the line
      to the last candle's price so the projected D leg is visible. */
   if(best&&best.forming){
@@ -1242,7 +1251,25 @@ function detectElliott(cs){
       points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','A','B','C'][idx]}));
     }
   }
-  return{sig,wave,desc,why,points,bullBias:wave>0};
+  /* Project the next expected move using the standard Elliott ratios:
+     wave 3 ≈ 1.618× wave 1 (measured from the wave-2 low/high), wave 5 ≈
+     wave 1 by equality (measured from the wave-4 low/high), corrective C
+     ≈ wave A by equality (measured from wave B). Falls back to no target
+     when the needed pivots aren't present. */
+  let target=null;
+  const byLbl=l=>points.find(p=>p.label===l);
+  const p0=byLbl('0'),p1=byLbl('1'),p2=byLbl('2'),p4=byLbl('4'),pA=byLbl('A'),pB=byLbl('B');
+  if(p4&&p0&&p1){
+    const w1=p1.price-p0.price;
+    target={price:+(p4.price+w1).toFixed(2),label:'هدف الموجة ⑤ (تعادل مع الموجة ①)',basis:'equality'};
+  }else if(p2&&p0&&p1){
+    const w1=p1.price-p0.price;
+    target={price:+(p2.price+1.618*w1).toFixed(2),label:'هدف الموجة ③ (امتداد 1.618×)',basis:'ext1618'};
+  }else if(pB&&p0&&pA){
+    const wA=pA.price-p0.price;
+    target={price:+(pB.price+wA).toFixed(2),label:'هدف الموجة C (تعادل مع الموجة A)',basis:'equality'};
+  }
+  return{sig,wave,desc,why,points,bullBias:wave>0,target};
 }
 
 /* ══ LIMIT-UP HUNTER ══ */
@@ -2366,7 +2393,7 @@ function updateChart(sym){
 /* ══ PATTERN OVERLAY (Harmonic / Elliott) — draws the actual detected
    structure on the main chart so the user can see its shape, whether or
    not the pattern is fully complete. ══ */
-let _patMode=null,_patLineSeries=null;
+let _patMode=null,_patLineSeries=null,_patTargetLines=[];
 function refreshPatternButtons(sym){
   ensurePatternData(sym);
   const harm=G.harmCache?.[sym],ew=G.ewCache?.[sym];
@@ -2382,6 +2409,7 @@ function ensurePatternData(sym){
 }
 function clearPatternDrawing(){
   if(_patLineSeries){try{G.lwChart.removeSeries(_patLineSeries);}catch(e){}_patLineSeries=null;}
+  if(_patTargetLines.length){_patTargetLines.forEach(l=>{try{G.cSeries.removePriceLine(l);}catch(e){}});_patTargetLines=[];}
   if(G.cSeries)G.cSeries.setMarkers([]);
 }
 function clearPatterns(){
@@ -2423,12 +2451,27 @@ function drawPattern(mode,silent){
     return{time:p.time,position:isPeak?'aboveBar':'belowBar',color:col,shape:'circle',text:p.label,size:2};
   });
   if(G.cSeries)G.cSeries.setMarkers(mk);
+  /* Draw the projected target(s) as horizontal price lines so the user
+     can see exactly where the pattern/wave expects price to go next. */
+  const aP=(price,title,color,style)=>{try{_patTargetLines.push(G.cSeries.createPriceLine({price,title,color,lineWidth:1.5,lineStyle:style||2,axisLabelVisible:true}));}catch(e){}};
+  if(mode==='harm'&&data.targets){
+    const t=data.targets;
+    aP(t.t1,'هدف 1',col,2);
+    aP(t.t2,'هدف 2',col,2);
+    aP(t.t3,'هدف 3 (A)',col,1);
+    aP(t.sl,'وقف الخسارة',mode==='harm'?'#f04458':'#f04458',0);
+  }else if(mode==='ew'&&data.target){
+    aP(data.target.price,data.target.label,col,2);
+  }
   const info=document.getElementById('pat-info');
   if(info){
     if(mode==='harm'){
-      info.innerHTML=`<b>🦋 نموذج ${data.name}</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'} ${data.forming?'(قيد التكوّن، لم يكتمل بعد — الخط المتقطع يمثل الامتداد المتوقع لنقطة D)':'(مكتمل)'} — اكتمال ${data.completion}%<br>${data.why}`;
+      const t=data.targets;
+      const tgTxt=t?`<br><b>🎯 الأهداف:</b> هدف1=${t.t1} · هدف2=${t.t2} · هدف3(A)=${t.t3} — <b>وقف الخسارة:</b> ${t.sl}`:'';
+      info.innerHTML=`<b>🦋 نموذج ${data.name}</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'} ${data.forming?'(قيد التكوّن، لم يكتمل بعد — الخط المتقطع يمثل الامتداد المتوقع لنقطة D)':'(مكتمل)'} — اكتمال ${data.completion}%<br>${data.why}${tgTxt}`;
     }else{
-      info.innerHTML=`<b>🌊 إيليوت</b> — ${data.desc||'—'} ${data.wave!==0?`(${data.sig})`:''}<br>${data.why}`;
+      const tgTxt=data.target?`<br><b>🎯 ${data.target.label}:</b> ${data.target.price}`:'<br><span style="color:var(--t3)">لا يوجد هدف واضح في هذه المرحلة من الموجة</span>';
+      info.innerHTML=`<b>🌊 إيليوت</b> — ${data.desc||'—'} ${data.wave!==0?`(${data.sig})`:''}<br>${data.why}${tgTxt}`;
     }
     info.classList.add('show');
   }
