@@ -137,6 +137,14 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 .pat-info{padding:7px 12px;font-size:10px;color:var(--t2);background:rgba(167,139,250,.05);border-bottom:1px solid var(--bd);display:none;line-height:1.6}
 .pat-info.show{display:block}
 .pat-info b{color:var(--pu)}
+.draw-ctrl{display:flex;gap:4px;padding:6px 12px;background:var(--c1);border-bottom:1px solid var(--bd);flex-shrink:0;flex-wrap:wrap;align-items:center}
+.draw-btn,.draw-tool-btn{padding:4px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit;border:1px solid var(--bd2);background:none;color:var(--t2);transition:all .15s;font-weight:600}
+.draw-btn:hover,.draw-tool-btn:hover{border-color:var(--pu);color:var(--pu)}
+.draw-btn.on{background:rgba(167,139,250,.15);border-color:var(--pu);color:var(--pu)}
+#draw-color{width:26px;height:26px;padding:0;border:1px solid var(--bd2);border-radius:4px;background:none;cursor:pointer}
+#chart-area.expanded{max-height:85vh}
+.filters-panel.collapsed-for-chart{width:0!important;min-width:0!important;padding:0;overflow:hidden;border:none}
+@media(max-width:900px){#chart-area.expanded{max-height:70vh}.filters-panel.collapsed-for-chart{display:none}}
 #csym{font-size:13px;font-weight:700;color:var(--bl)}
 #cprc{font-size:16px;font-weight:700;font-family:'IBM Plex Mono',monospace}
 #cchg{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:500;font-family:'IBM Plex Mono',monospace}
@@ -358,7 +366,17 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
       <button class="pat-clear" onclick="clearPatterns()">مسح الرسم ✕</button>
     </div>
     <div class="pat-info" id="pat-info"></div>
+    <div class="draw-ctrl">
+      <button class="draw-btn" id="draw-trend" onclick="setDrawMode('trend')" title="خط اتجاه: انقر نقطتين">📈 اتجاه</button>
+      <button class="draw-btn" id="draw-hline" onclick="setDrawMode('hline')" title="خط أفقي: انقر مرة">➖ أفقي</button>
+      <button class="draw-btn" id="draw-free" onclick="setDrawMode('free')" title="رسم حر: اسحب بالماوس">✏️ حر</button>
+      <input type="color" id="draw-color" value="#FFD700" title="لون الرسم">
+      <button class="draw-tool-btn" onclick="undoDrawing()" title="تراجع عن آخر رسمة">↩️ تراجع</button>
+      <button class="draw-tool-btn" onclick="clearDrawings()" title="مسح كل رسوماتي">🧹 مسح رسوماتي</button>
+      <button class="draw-tool-btn" id="chart-expand-btn" onclick="toggleChartExpand()" style="margin-right:auto">⛶ تكبير</button>
+    </div>
     <div id="chart-area"><div id="lw-chart"></div></div>
+
 
     <!-- Trade Plan Panel -->
     <div class="tp-panel" id="tp-panel">
@@ -2466,6 +2484,10 @@ function initChart(){
   const addLine=(col,lw)=>G.lwChart.addLineSeries({color:col,lineWidth:lw,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
   G.series.s20=addLine('#f5c842',1);G.series.s50=addLine('#a78bfa',1);
   new ResizeObserver(()=>{if(G.lwChart){G.lwChart.applyOptions({width:ct.clientWidth,height:ct.clientHeight});}}).observe(ct);
+  ct.addEventListener('click',onChartDrawClick);
+  ct.addEventListener('mousedown',onChartDrawMouseDown);
+  ct.addEventListener('mousemove',onChartDrawMouseMove);
+  window.addEventListener('mouseup',onChartDrawMouseUp);
 }
 
 function updateChart(sym){
@@ -2479,6 +2501,111 @@ function updateChart(sym){
   refreshPatternButtons(sym);
   /* Re-draw whichever overlay was active when switching stocks/timeframes */
   if(_patMode)drawPattern(_patMode,true);
+  renderUserDrawings(sym);
+}
+
+/* ══ MANUAL DRAWING TOOLS (trend lines / horizontal lines / freehand) ══
+   Drawings are kept in memory per symbol for the whole session — they are
+   NOT cleared when switching stocks/timeframes and back, only when the
+   user explicitly hits "مسح" or "تراجع", or the page is reloaded. */
+G.draw=G.draw||{};
+let _drawMode=null,_drawPending=null,_freehandActive=false,_freehandBuffer=[],_userDrawObjs=[];
+function _drawColor(){return document.getElementById('draw-color')?.value||'#FFD700';}
+function chartXYToTimePrice(e){
+  const el=document.getElementById('lw-chart');if(!el||!G.lwChart||!G.cSeries)return null;
+  const rect=el.getBoundingClientRect();
+  const x=e.clientX-rect.left,y=e.clientY-rect.top;
+  const time=G.lwChart.timeScale().coordinateToTime(x);
+  const price=G.cSeries.coordinateToPrice(y);
+  return(time==null||price==null)?null:{time,price:+price.toFixed(2)};
+}
+function setDrawMode(mode){
+  _drawMode=(_drawMode===mode)?null:mode;
+  document.querySelectorAll('.draw-btn').forEach(b=>b.classList.remove('on'));
+  const el=document.getElementById('lw-chart');
+  if(_drawMode){
+    document.getElementById('draw-'+_drawMode)?.classList.add('on');
+    G.lwChart?.applyOptions({handleScroll:false,handleScale:false});
+    if(el)el.style.cursor='crosshair';
+  }else{
+    G.lwChart?.applyOptions({handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true},handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true}});
+    if(el)el.style.cursor='default';
+  }
+  _drawPending=null;_freehandBuffer=[];_freehandActive=false;
+}
+function onChartDrawClick(e){
+  if(!_drawMode||_drawMode==='free')return;
+  const tp=chartXYToTimePrice(e);if(!tp)return;
+  const sym=G.sel;G.draw[sym]=G.draw[sym]||[];
+  if(_drawMode==='hline'){
+    G.draw[sym].push({type:'hline',price:tp.price,color:_drawColor()});
+    renderUserDrawings(sym);setDrawMode(null);
+  }else if(_drawMode==='trend'){
+    if(!_drawPending){_drawPending=tp;return;}
+    let p1=_drawPending,p2=tp;
+    if(p2.time<p1.time){const t=p1;p1=p2;p2=t;}
+    if(p1.time===p2.time)p2={...p2,time:p2.time+1};
+    G.draw[sym].push({type:'trend',p1,p2,color:_drawColor()});
+    renderUserDrawings(sym);setDrawMode(null);
+  }
+}
+function onChartDrawMouseDown(e){
+  if(_drawMode!=='free')return;
+  _freehandActive=true;_freehandBuffer=[];
+  const tp=chartXYToTimePrice(e);if(tp)_freehandBuffer.push(tp);
+}
+function onChartDrawMouseMove(e){
+  if(!_freehandActive)return;
+  const tp=chartXYToTimePrice(e);if(tp)_freehandBuffer.push(tp);
+}
+function onChartDrawMouseUp(){
+  if(!_freehandActive)return;
+  _freehandActive=false;
+  if(_freehandBuffer.length>=2){
+    const sym=G.sel;G.draw[sym]=G.draw[sym]||[];
+    const sorted=[..._freehandBuffer].sort((a,b)=>a.time-b.time);
+    const dedup=[];for(const p of sorted){if(!dedup.length||dedup[dedup.length-1].time!==p.time)dedup.push(p);}
+    if(dedup.length>=2)G.draw[sym].push({type:'free',pts:dedup,color:_drawColor()});
+    renderUserDrawings(sym);
+  }
+  _freehandBuffer=[];setDrawMode(null);
+}
+function renderUserDrawings(sym){
+  if(!G.lwChart||!G.cSeries)return;
+  _userDrawObjs.forEach(o=>{try{if(o.kind==='line')G.lwChart.removeSeries(o.obj);else G.cSeries.removePriceLine(o.obj);}catch(e){}});
+  _userDrawObjs=[];
+  (G.draw[sym]||[]).forEach(d=>{
+    try{
+      if(d.type==='hline'){
+        const pl=G.cSeries.createPriceLine({price:d.price,color:d.color,lineWidth:2,lineStyle:0,axisLabelVisible:true,title:'خط'});
+        _userDrawObjs.push({kind:'priceline',obj:pl});
+      }else if(d.type==='trend'){
+        const s=G.lwChart.addLineSeries({color:d.color,lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+        s.setData([{time:d.p1.time,value:d.p1.price},{time:d.p2.time,value:d.p2.price}]);
+        _userDrawObjs.push({kind:'line',obj:s});
+      }else if(d.type==='free'){
+        const s=G.lwChart.addLineSeries({color:d.color,lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+        s.setData(d.pts.map(p=>({time:p.time,value:p.price})));
+        _userDrawObjs.push({kind:'line',obj:s});
+      }
+    }catch(e){}
+  });
+}
+function undoDrawing(){
+  const sym=G.sel;if(!G.draw[sym]||!G.draw[sym].length)return;
+  G.draw[sym].pop();renderUserDrawings(sym);
+}
+function clearDrawings(){
+  const sym=G.sel;G.draw[sym]=[];renderUserDrawings(sym);
+}
+function toggleChartExpand(){
+  const area=document.getElementById('chart-area');
+  const btn=document.getElementById('chart-expand-btn');
+  const expanded=area.classList.toggle('expanded');
+  document.getElementById('filters-panel')?.classList.toggle('collapsed-for-chart',expanded);
+  if(btn)btn.innerHTML=expanded?'⛶ تصغير':'⛶ تكبير';
+  /* ResizeObserver on #lw-chart already picks up the size change and
+     calls applyOptions({width,height}) automatically. */
 }
 
 /* ══ PATTERN OVERLAY (Harmonic / Elliott) — draws the actual detected
