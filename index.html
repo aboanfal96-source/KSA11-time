@@ -1198,9 +1198,19 @@ function detectHarmonic(cs){
   const zz=calcZigZag(cs,3);if(zz.length<5)return null;
   const DEFS=[['Gartley',.58,.65,.35,.9,1.2,1.7,.73,.82,true],['Bat',.35,.52,.35,.9,1.6,2.7,.82,.9,true],['Butterfly',.73,.82,.35,.9,1.6,2.26,1.25,1.4,false],['Crab',.35,.62,.35,.9,2.22,3.14,1.58,1.66,true],['Shark',.44,.52,1.1,1.65,1.6,2.26,.85,1.15,true],['Cypher',.38,.62,1.1,1.44,.7,.8,.77,.82,true]];
   let best=null,bestScore=0;
-  for(let xi=0;xi<zz.length-4;xi++){const X=zz[xi],A=zz[xi+1],B=zz[xi+2],C=zz[xi+3],D=zz[zz.length-1];const XA=Math.abs(A.p-X.p);if(!XA)continue;const AB=Math.abs(B.p-A.p),BC=Math.abs(C.p-B.p),CD=Math.abs(D.p-C.p);if(!AB||!BC)continue;const rXAB=AB/XA,rABC=BC/AB,rBCD=BC>0?CD/BC:0;for(const[name,xl,xh,al,ah,bl,bh,xdl,xdh,bull]of DEFS){if(rXAB<xl||rXAB>xh||rABC<al||rABC>ah)continue;const bcdOk=rBCD>=bl&&rBCD<=bh,forming=!bcdOk&&rBCD>=bl*0.7;if(!bcdOk&&!forming)continue;const score=100-Math.abs(rXAB-(xl+xh)/2)/(xl+xh)*40-Math.abs(rABC-(al+ah)/2)/(al+ah)*30-Math.abs(rBCD-(bl+bh)/2)/(bl+bh)*30;if(score>bestScore){bestScore=score;const bullish=bull?(D.p<X.p):(D.p>X.p);
+  /* X-A-B-C-D must be 5 CONSECUTIVE zigzag pivots in chronological order —
+     using a fixed/last D regardless of window caused duplicate or
+     out-of-order timestamps, which Lightweight Charts silently rejects
+     (the whole series/markers draw call fails and nothing appears). */
+  for(let xi=0;xi<=zz.length-5;xi++){const X=zz[xi],A=zz[xi+1],B=zz[xi+2],C=zz[xi+3],D=zz[xi+4];const XA=Math.abs(A.p-X.p);if(!XA)continue;const AB=Math.abs(B.p-A.p),BC=Math.abs(C.p-B.p),CD=Math.abs(D.p-C.p);if(!AB||!BC)continue;const rXAB=AB/XA,rABC=BC/AB,rBCD=BC>0?CD/BC:0;for(const[name,xl,xh,al,ah,bl,bh,xdl,xdh,bull]of DEFS){if(rXAB<xl||rXAB>xh||rABC<al||rABC>ah)continue;const bcdOk=rBCD>=bl&&rBCD<=bh,forming=!bcdOk&&rBCD>=bl*0.7;if(!bcdOk&&!forming)continue;const score=100-Math.abs(rXAB-(xl+xh)/2)/(xl+xh)*40-Math.abs(rABC-(al+ah)/2)/(al+ah)*30-Math.abs(rBCD-(bl+bh)/2)/(bl+bh)*30;if(score>bestScore){bestScore=score;const bullish=bull?(D.p<X.p):(D.p>X.p);
     const pts=[{i:X.i,time:cs[X.i].time,price:X.p,label:'X'},{i:A.i,time:cs[A.i].time,price:A.p,label:'A'},{i:B.i,time:cs[B.i].time,price:B.p,label:'B'},{i:C.i,time:cs[C.i].time,price:C.p,label:'C'},{i:D.i,time:cs[D.i].time,price:D.p,label:'D'+(bcdOk?'':' (متوقعة)')}];
     best={name,sig:bullish?'شراء':'بيع',forming:!bcdOk,completion:bcdOk?100:Math.min(99,Math.round(rBCD/bl*100)),score:Math.round(score),points:pts,why:`نموذج ${name} ${bullish?'صعودي':'هبوطي'} — اكتمال ${bcdOk?100:Math.round(rBCD/bl*100)}% — النسب: XAB=${rXAB.toFixed(3)} ABC=${rABC.toFixed(3)} BCD=${rBCD.toFixed(3)}`};}}}
+  /* If the pattern is still forming (D not yet printed), extend the line
+     to the last candle's price so the projected D leg is visible. */
+  if(best&&best.forming){
+    const lastIdx=cs.length-1;
+    if(best.points[4].i<lastIdx){best.points[4]={...best.points[4],i:lastIdx,time:cs[lastIdx].time,price:cs[lastIdx].close};}
+  }
   return best;
 }
 
@@ -2358,6 +2368,7 @@ function updateChart(sym){
    not the pattern is fully complete. ══ */
 let _patMode=null,_patLineSeries=null;
 function refreshPatternButtons(sym){
+  ensurePatternData(sym);
   const harm=G.harmCache?.[sym],ew=G.ewCache?.[sym];
   const hb=document.getElementById('pat-harm-btn'),eb=document.getElementById('pat-ew-btn');
   if(hb)hb.classList.toggle('disabled',!harm);
@@ -2401,15 +2412,21 @@ function drawPattern(mode,silent){
   const pts=data.points;
   if(!pts||pts.length<2)return;
   const col=mode==='harm'?(data.sig==='شراء'?'#0ecf7e':'#f04458'):(data.bullBias?'#4a9eff':'#fb923c');
-  _patLineSeries=G.lwChart.addLineSeries({color:col,lineWidth:2,lineStyle:mode==='ew'?0:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  _patLineSeries=G.lwChart.addLineSeries({color:col,lineWidth:3,lineStyle:mode==='harm'&&data.forming?2:0,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
   _patLineSeries.setData(pts.map(p=>({time:p.time,value:p.price})));
-  /* alternate above/below so labels don't overlap the candles */
-  const mk=pts.map((p,i)=>({time:p.time,position:i%2===0?'aboveBar':'belowBar',color:col,shape:'circle',text:p.label}));
+  /* Label position follows the actual zig-zag shape: a local peak gets its
+     label above the candle, a local trough gets it below — instead of a
+     blind alternation that can land the text on top of the wick. */
+  const mk=pts.map((p,i)=>{
+    const prev=pts[i-1],next=pts[i+1];
+    const isPeak=(!prev||p.price>=prev.price)&&(!next||p.price>=next.price);
+    return{time:p.time,position:isPeak?'aboveBar':'belowBar',color:col,shape:'circle',text:p.label,size:2};
+  });
   if(G.cSeries)G.cSeries.setMarkers(mk);
   const info=document.getElementById('pat-info');
   if(info){
     if(mode==='harm'){
-      info.innerHTML=`<b>🦋 نموذج ${data.name}</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'} ${data.forming?'(قيد التكوّن، لم يكتمل بعد)':'(مكتمل)'} — اكتمال ${data.completion}%<br>${data.why}`;
+      info.innerHTML=`<b>🦋 نموذج ${data.name}</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'} ${data.forming?'(قيد التكوّن، لم يكتمل بعد — الخط المتقطع يمثل الامتداد المتوقع لنقطة D)':'(مكتمل)'} — اكتمال ${data.completion}%<br>${data.why}`;
     }else{
       info.innerHTML=`<b>🌊 إيليوت</b> — ${data.desc||'—'} ${data.wave!==0?`(${data.sig})`:''}<br>${data.why}`;
     }
