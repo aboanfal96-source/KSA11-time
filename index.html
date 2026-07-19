@@ -21,6 +21,25 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 #clk{color:var(--t2);font-size:10px;font-family:'IBM Plex Mono',monospace}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--up);animation:pulse 1.6s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.stock-search{position:relative;display:flex;align-items:center}
+.stock-search input{width:150px;background:var(--c3);border:1px solid var(--bd2);border-radius:4px;color:var(--t1);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:11px;padding:5px 8px 5px 26px;outline:none;transition:all .15s}
+.stock-search input::placeholder{color:var(--t3)}
+.stock-search input:focus{border-color:var(--pu);background:var(--c4);width:190px}
+.stock-search .ss-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:11px;pointer-events:none}
+.stock-search .ss-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:12px;cursor:pointer;display:none;padding:2px}
+.stock-search .ss-clear:hover{color:var(--dn)}
+.stock-search.has-val .ss-clear{display:block}
+.ss-drop{position:absolute;top:calc(100% + 4px);left:0;width:260px;max-height:320px;overflow-y:auto;background:var(--c2);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:200;display:none;scrollbar-width:thin}
+.ss-drop.show{display:block}
+.ss-drop::-webkit-scrollbar{width:4px}
+.ss-drop::-webkit-scrollbar-thumb{background:var(--c4)}
+.ss-item{padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd);transition:background .1s}
+.ss-item:last-child{border-bottom:none}
+.ss-item:hover,.ss-item.ss-active{background:rgba(139,92,246,.12)}
+.ss-item .ss-sym{font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--pu);font-size:11px;min-width:42px}
+.ss-item .ss-name{color:var(--t1);font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ss-item .ss-price{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--t2)}
+.ss-empty{padding:12px 10px;color:var(--t3);font-size:10px;text-align:center}
 .zoom-ctrl{display:flex;gap:2px;align-items:center}
 .zoom-btn{width:24px;height:24px;border:1px solid var(--bd);background:var(--c3);color:var(--t2);border-radius:3px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .1s;font-family:monospace}
 .zoom-btn:hover{border-color:var(--bl);color:var(--bl);background:var(--bl2)}
@@ -108,6 +127,16 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 
 /* Chart header */
 .chdr{padding:6px 12px;background:var(--c2);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap}
+.pat-ctrl{display:flex;gap:4px;padding:6px 12px;background:var(--c1);border-bottom:1px solid var(--bd);flex-shrink:0;flex-wrap:wrap;align-items:center}
+.pat-btn{padding:4px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit;border:1px solid var(--bd2);background:none;color:var(--t2);transition:all .15s;font-weight:600;display:flex;align-items:center;gap:4px}
+.pat-btn:hover{border-color:var(--pu);color:var(--pu)}
+.pat-btn.on{background:rgba(167,139,250,.15);border-color:var(--pu);color:var(--pu)}
+.pat-btn.disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+.pat-clear{margin-right:auto;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:10px;border:1px solid var(--bd2);background:none;color:var(--t3)}
+.pat-clear:hover{border-color:var(--dn);color:var(--dn)}
+.pat-info{padding:7px 12px;font-size:10px;color:var(--t2);background:rgba(167,139,250,.05);border-bottom:1px solid var(--bd);display:none;line-height:1.6}
+.pat-info.show{display:block}
+.pat-info b{color:var(--pu)}
 #csym{font-size:13px;font-weight:700;color:var(--bl)}
 #cprc{font-size:16px;font-weight:700;font-family:'IBM Plex Mono',monospace}
 #cchg{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:500;font-family:'IBM Plex Mono',monospace}
@@ -237,6 +266,13 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 <!-- ══ TOP BAR ══ -->
 <div class="top">
   <div class="logo">⚡ TADAWUL FILTERS <span class="logo-sub">PRO</span></div>
+  <div class="stock-search" id="stock-search">
+    <span class="ss-icon">🔍</span>
+    <input type="text" id="ss-input" placeholder="ابحث برقم السهم أو اسمه…" autocomplete="off"
+      oninput="ssOnInput(this.value)" onfocus="ssOnInput(this.value)" onkeydown="ssKeyDown(event)">
+    <span class="ss-clear" onclick="ssClear()">✕</span>
+    <div class="ss-drop" id="ss-drop"></div>
+  </div>
   <div class="top-r">
     <div class="zoom-ctrl">
       <button class="zoom-btn" onclick="zoomUI(-1)" title="تصغير">−</button>
@@ -316,6 +352,12 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
         <button class="tf" onclick="setTF('1y','1wk',this)">سنة</button>
       </div>
     </div>
+    <div class="pat-ctrl">
+      <button class="pat-btn" id="pat-harm-btn" onclick="togglePattern('harm')"><span>🦋</span> هارمونيك</button>
+      <button class="pat-btn" id="pat-ew-btn" onclick="togglePattern('ew')"><span>🌊</span> إيليوت</button>
+      <button class="pat-clear" onclick="clearPatterns()">مسح الرسم ✕</button>
+    </div>
+    <div class="pat-info" id="pat-info"></div>
     <div id="chart-area"><div id="lw-chart"></div></div>
 
     <!-- Trade Plan Panel -->
@@ -595,6 +637,74 @@ const NAMES={
 };
 const SEC={'1':'مصارف وخدمات مالية','2':'صناعة وبتروكيماويات','3':'إسمنت ومواد بناء','4':'تنويع وصحة وخدمات','5':'طاقة وكهرباء','6':'غذاء وزراعة','7':'اتصالات وتقنية','8':'تأمين','9':'عقارات وإدارة أصول'};
 const STKS=Object.entries(NAMES).map(([s,n])=>({sym:s,name:n,sec:SEC[s[0]]||'أخرى'}));
+
+/* ══ STOCK SEARCH (manual lookup — independent of scan/score/filters) ══
+   Lets the user jump straight to ANY stock by number or name, even if it
+   never appeared in a scan result or didn't meet any filter/score threshold. */
+let _ssActive=-1,_ssResults=[];
+function ssNorm(s){return(s||'').toString().trim().toLowerCase()
+  .replace(/[إأآا]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[ًٌٍَُِّْ]/g,'');}
+function ssSearch(q){
+  const n=ssNorm(q);if(!n)return[];
+  const starts=[],inc=[];
+  for(const s of STKS){
+    const sym=s.sym,nm=ssNorm(s.name);
+    if(sym.startsWith(n)||nm.startsWith(n))starts.push(s);
+    else if(sym.includes(n)||nm.includes(n))inc.push(s);
+  }
+  return[...starts,...inc].slice(0,30);
+}
+function ssRenderDrop(list){
+  const d=document.getElementById('ss-drop');_ssActive=-1;
+  if(!list.length){d.innerHTML='<div class="ss-empty">لا توجد نتائج مطابقة</div>';d.classList.add('show');return;}
+  d.innerHTML=list.map((s,i)=>{
+    const p=G.pr[s.sym];const pTxt=p?p.toFixed(2)+' ر.س':'';
+    return`<div class="ss-item" data-sym="${s.sym}" data-idx="${i}" onclick="ssPick('${s.sym}')">
+      <span class="ss-sym">${s.sym}</span><span class="ss-name">${s.name}</span><span class="ss-price">${pTxt}</span>
+    </div>`;
+  }).join('');
+  d.classList.add('show');
+}
+function ssOnInput(v){
+  const box=document.getElementById('stock-search');
+  box.classList.toggle('has-val',!!v);
+  _ssResults=ssSearch(v);
+  if(!v){document.getElementById('ss-drop').classList.remove('show');return;}
+  ssRenderDrop(_ssResults);
+}
+function ssKeyDown(e){
+  const d=document.getElementById('ss-drop');
+  if(!d.classList.contains('show')||!_ssResults.length){
+    if(e.key==='Enter'&&_ssResults.length===1)ssPick(_ssResults[0].sym);
+    return;
+  }
+  const items=[...d.querySelectorAll('.ss-item')];
+  if(e.key==='ArrowDown'){e.preventDefault();_ssActive=Math.min(_ssActive+1,items.length-1);ssHi(items);}
+  else if(e.key==='ArrowUp'){e.preventDefault();_ssActive=Math.max(_ssActive-1,0);ssHi(items);}
+  else if(e.key==='Enter'){e.preventDefault();const pick=_ssActive>=0?_ssResults[_ssActive]:_ssResults[0];if(pick)ssPick(pick.sym);}
+  else if(e.key==='Escape'){ssClear();document.getElementById('ss-input').blur();}
+}
+function ssHi(items){items.forEach((it,i)=>it.classList.toggle('ss-active',i===_ssActive));if(_ssActive>=0)items[_ssActive].scrollIntoView({block:'nearest'});}
+function ssClear(){
+  document.getElementById('ss-input').value='';
+  document.getElementById('stock-search').classList.remove('has-val');
+  document.getElementById('ss-drop').classList.remove('show');
+  _ssResults=[];_ssActive=-1;
+}
+function ssPick(sym){
+  document.getElementById('ss-input').value=`${sym} — ${NAMES[sym]||''}`;
+  document.getElementById('ss-drop').classList.remove('show');
+  document.getElementById('stock-search').classList.add('has-val');
+  /* Jump straight to the chart/trade-plan for this stock, regardless of
+     whether it appeared in any scan, met any score, or passed any filter. */
+  selectStock(sym);
+  const rp=document.querySelector('.right-panel');
+  if(rp)rp.scrollIntoView({behavior:'smooth',block:'start'});
+}
+document.addEventListener('click',(e)=>{
+  const box=document.getElementById('stock-search');
+  if(box&&!box.contains(e.target))document.getElementById('ss-drop').classList.remove('show');
+});
 const PRI=['2222','1120','2010','7010','1180','1010','1211','2082','4013','1150','1060','2280','4190','7203','8210','1111','2020','4001','2050','4280'];
 const BPX={
 '1010':20.9,
@@ -827,7 +937,7 @@ function parseY(res,sym){
   const last=cs[cs.length-1],pv=+(m.previousClose||m.chartPreviousClose||cs[cs.length-2]?.close||last.open).toFixed(2);
   return{sym,cs,price:+(m.regularMarketPrice||last.close).toFixed(2),pv,hi:last.high,lo:last.low,op:last.open,vo:last.volume};
 }
-function applyY(sym,d){G.cans[sym]=d.cs;G.pr[sym]=d.price;G.op[sym]=d.op;G.hi[sym]=d.hi;G.lo[sym]=d.lo;G.vo[sym]=d.vo;G.ch[sym]=+(d.price-d.pv).toFixed(2);G.pc[sym]=+((d.price-d.pv)/d.pv*100).toFixed(2);calcInd(sym);}
+function applyY(sym,d){G.cans[sym]=d.cs;G.pr[sym]=d.price;G.op[sym]=d.op;G.hi[sym]=d.hi;G.lo[sym]=d.lo;G.vo[sym]=d.vo;G.ch[sym]=+(d.price-d.pv).toFixed(2);G.pc[sym]=+((d.price-d.pv)/d.pv*100).toFixed(2);calcInd(sym);if(G.harmCache)delete G.harmCache[sym];if(G.ewCache)delete G.ewCache[sym];}
 async function loadStock(sym,range,interval){
   if(G.ldg.has(sym))return;G.ldg.add(sym);
   const r=range||G.tf,i=interval||G.tfi;let ok=false;
@@ -1088,12 +1198,14 @@ function detectHarmonic(cs){
   const zz=calcZigZag(cs,3);if(zz.length<5)return null;
   const DEFS=[['Gartley',.58,.65,.35,.9,1.2,1.7,.73,.82,true],['Bat',.35,.52,.35,.9,1.6,2.7,.82,.9,true],['Butterfly',.73,.82,.35,.9,1.6,2.26,1.25,1.4,false],['Crab',.35,.62,.35,.9,2.22,3.14,1.58,1.66,true],['Shark',.44,.52,1.1,1.65,1.6,2.26,.85,1.15,true],['Cypher',.38,.62,1.1,1.44,.7,.8,.77,.82,true]];
   let best=null,bestScore=0;
-  for(let xi=0;xi<zz.length-4;xi++){const X=zz[xi],A=zz[xi+1],B=zz[xi+2],C=zz[xi+3],D=zz[zz.length-1];const XA=Math.abs(A.p-X.p);if(!XA)continue;const AB=Math.abs(B.p-A.p),BC=Math.abs(C.p-B.p),CD=Math.abs(D.p-C.p);if(!AB||!BC)continue;const rXAB=AB/XA,rABC=BC/AB,rBCD=BC>0?CD/BC:0;for(const[name,xl,xh,al,ah,bl,bh,xdl,xdh,bull]of DEFS){if(rXAB<xl||rXAB>xh||rABC<al||rABC>ah)continue;const bcdOk=rBCD>=bl&&rBCD<=bh,forming=!bcdOk&&rBCD>=bl*0.7;if(!bcdOk&&!forming)continue;const score=100-Math.abs(rXAB-(xl+xh)/2)/(xl+xh)*40-Math.abs(rABC-(al+ah)/2)/(al+ah)*30-Math.abs(rBCD-(bl+bh)/2)/(bl+bh)*30;if(score>bestScore){bestScore=score;const bullish=bull?(D.p<X.p):(D.p>X.p);best={name,sig:bullish?'شراء':'بيع',forming:!bcdOk,completion:bcdOk?100:Math.min(99,Math.round(rBCD/bl*100)),score:Math.round(score),why:`نموذج ${name} ${bullish?'صعودي':'هبوطي'} — اكتمال ${bcdOk?100:Math.round(rBCD/bl*100)}% — النسب: XAB=${rXAB.toFixed(3)} ABC=${rABC.toFixed(3)} BCD=${rBCD.toFixed(3)}`};}}}
+  for(let xi=0;xi<zz.length-4;xi++){const X=zz[xi],A=zz[xi+1],B=zz[xi+2],C=zz[xi+3],D=zz[zz.length-1];const XA=Math.abs(A.p-X.p);if(!XA)continue;const AB=Math.abs(B.p-A.p),BC=Math.abs(C.p-B.p),CD=Math.abs(D.p-C.p);if(!AB||!BC)continue;const rXAB=AB/XA,rABC=BC/AB,rBCD=BC>0?CD/BC:0;for(const[name,xl,xh,al,ah,bl,bh,xdl,xdh,bull]of DEFS){if(rXAB<xl||rXAB>xh||rABC<al||rABC>ah)continue;const bcdOk=rBCD>=bl&&rBCD<=bh,forming=!bcdOk&&rBCD>=bl*0.7;if(!bcdOk&&!forming)continue;const score=100-Math.abs(rXAB-(xl+xh)/2)/(xl+xh)*40-Math.abs(rABC-(al+ah)/2)/(al+ah)*30-Math.abs(rBCD-(bl+bh)/2)/(bl+bh)*30;if(score>bestScore){bestScore=score;const bullish=bull?(D.p<X.p):(D.p>X.p);
+    const pts=[{i:X.i,time:cs[X.i].time,price:X.p,label:'X'},{i:A.i,time:cs[A.i].time,price:A.p,label:'A'},{i:B.i,time:cs[B.i].time,price:B.p,label:'B'},{i:C.i,time:cs[C.i].time,price:C.p,label:'C'},{i:D.i,time:cs[D.i].time,price:D.p,label:'D'+(bcdOk?'':' (متوقعة)')}];
+    best={name,sig:bullish?'شراء':'بيع',forming:!bcdOk,completion:bcdOk?100:Math.min(99,Math.round(rBCD/bl*100)),score:Math.round(score),points:pts,why:`نموذج ${name} ${bullish?'صعودي':'هبوطي'} — اكتمال ${bcdOk?100:Math.round(rBCD/bl*100)}% — النسب: XAB=${rXAB.toFixed(3)} ABC=${rABC.toFixed(3)} BCD=${rBCD.toFixed(3)}`};}}}
   return best;
 }
 
 function detectElliott(cs){
-  const cl=cs.map(c=>c.close),n=cl.length;if(n<30)return{sig:'محايد',wave:0,why:'بيانات غير كافية'};
+  const cl=cs.map(c=>c.close),n=cl.length;if(n<30)return{sig:'محايد',wave:0,why:'بيانات غير كافية',points:[]};
   const roc=d=>n>d?((cl[n-1]-cl[n-1-d])/cl[n-1-d]*100):0;
   const r3=+roc(3).toFixed(2),r7=+roc(7).toFixed(2),r14=+roc(14).toFixed(2),r30=+roc(30).toFixed(2);
   let wave=0,sig='محايد',desc='',why='';
@@ -1103,7 +1215,24 @@ function detectElliott(cs){
   else if(r30<-8&&r14<-4){wave=-1;sig='بيع';desc='موجة C هبوطية';why=`هبوط حاد — ROC30=${r30}% ROC14=${r14}% ← موجة C تصحيحية`;}
   else if(r7>0&&r14<0){wave=1;sig='شراء';desc='الموجة ① بداية صعود';why=`انعكاس أسبوعي +${r7}% بعد هبوط ← بداية موجة صاعدة جديدة`;}
   else{why='لا موجة واضحة';}
-  return{sig,wave,desc,why};
+
+  /* Derive an actual pivot-point wave path from the zigzag so it can be
+     drawn on the chart — labeled either impulsively (0-1-2-3-4-5) or as a
+     corrective A-B-C, whichever the recent swing structure resembles. */
+  const zz=calcZigZag(cs,3);
+  let points=[];
+  if(zz.length>=4){
+    const tail=zz.slice(-6); /* up to 6 pivots ≈ origin + up to 5 wave legs */
+    if(tail.length>=6){
+      const use=tail.slice(-6);
+      points=use.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4','5'][idx]}));
+    }else if(tail.length===5){
+      points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4'][idx]}));
+    }else if(tail.length===4){
+      points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','A','B','C'][idx]}));
+    }
+  }
+  return{sig,wave,desc,why,points,bullBias:wave>0};
 }
 
 /* ══ LIMIT-UP HUNTER ══ */
@@ -2219,6 +2348,74 @@ function updateChart(sym){
   if(ind?.sma20)G.series.s20.setData(cs.map((c,i)=>ind.sma20[i]!=null?{time:c.time,value:ind.sma20[i]}:null).filter(Boolean));
   if(ind?.sma50)G.series.s50.setData(cs.map((c,i)=>ind.sma50[i]!=null?{time:c.time,value:ind.sma50[i]}:null).filter(Boolean));
   G.lwChart.timeScale().fitContent();
+  refreshPatternButtons(sym);
+  /* Re-draw whichever overlay was active when switching stocks/timeframes */
+  if(_patMode)drawPattern(_patMode,true);
+}
+
+/* ══ PATTERN OVERLAY (Harmonic / Elliott) — draws the actual detected
+   structure on the main chart so the user can see its shape, whether or
+   not the pattern is fully complete. ══ */
+let _patMode=null,_patLineSeries=null;
+function refreshPatternButtons(sym){
+  const harm=G.harmCache?.[sym],ew=G.ewCache?.[sym];
+  const hb=document.getElementById('pat-harm-btn'),eb=document.getElementById('pat-ew-btn');
+  if(hb)hb.classList.toggle('disabled',!harm);
+  if(eb)eb.classList.toggle('disabled',!ew||!ew.points?.length);
+}
+function ensurePatternData(sym){
+  const cs=G.cans[sym];if(!cs||cs.length<10)return;
+  G.harmCache=G.harmCache||{};G.ewCache=G.ewCache||{};
+  if(!G.harmCache[sym])G.harmCache[sym]=detectHarmonic(cs);
+  if(!G.ewCache[sym])G.ewCache[sym]=detectElliott(cs);
+}
+function clearPatternDrawing(){
+  if(_patLineSeries){try{G.lwChart.removeSeries(_patLineSeries);}catch(e){}_patLineSeries=null;}
+  if(G.cSeries)G.cSeries.setMarkers([]);
+}
+function clearPatterns(){
+  _patMode=null;
+  document.getElementById('pat-harm-btn')?.classList.remove('on');
+  document.getElementById('pat-ew-btn')?.classList.remove('on');
+  document.getElementById('pat-info')?.classList.remove('show');
+  clearPatternDrawing();
+}
+function togglePattern(mode){
+  const sym=G.sel;ensurePatternData(sym);
+  const data=mode==='harm'?G.harmCache[sym]:G.ewCache[sym];
+  if(!data||(mode==='ew'&&!data.points?.length)){
+    alert(mode==='harm'?'لا يوجد نموذج هارمونيك واضح حالياً على هذا السهم/الإطار الزمني':'لا توجد بيانات كافية لرسم موجات إيليوت حالياً');
+    return;
+  }
+  if(_patMode===mode){clearPatterns();return;}
+  _patMode=mode;
+  document.getElementById('pat-harm-btn')?.classList.toggle('on',mode==='harm');
+  document.getElementById('pat-ew-btn')?.classList.toggle('on',mode==='ew');
+  drawPattern(mode);
+}
+function drawPattern(mode,silent){
+  const sym=G.sel;ensurePatternData(sym);
+  const data=mode==='harm'?G.harmCache[sym]:G.ewCache[sym];
+  clearPatternDrawing();
+  if(!data)return;
+  const pts=data.points;
+  if(!pts||pts.length<2)return;
+  const col=mode==='harm'?(data.sig==='شراء'?'#0ecf7e':'#f04458'):(data.bullBias?'#4a9eff':'#fb923c');
+  _patLineSeries=G.lwChart.addLineSeries({color:col,lineWidth:2,lineStyle:mode==='ew'?0:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  _patLineSeries.setData(pts.map(p=>({time:p.time,value:p.price})));
+  /* alternate above/below so labels don't overlap the candles */
+  const mk=pts.map((p,i)=>({time:p.time,position:i%2===0?'aboveBar':'belowBar',color:col,shape:'circle',text:p.label}));
+  if(G.cSeries)G.cSeries.setMarkers(mk);
+  const info=document.getElementById('pat-info');
+  if(info){
+    if(mode==='harm'){
+      info.innerHTML=`<b>🦋 نموذج ${data.name}</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'} ${data.forming?'(قيد التكوّن، لم يكتمل بعد)':'(مكتمل)'} — اكتمال ${data.completion}%<br>${data.why}`;
+    }else{
+      info.innerHTML=`<b>🌊 إيليوت</b> — ${data.desc||'—'} ${data.wave!==0?`(${data.sig})`:''}<br>${data.why}`;
+    }
+    info.classList.add('show');
+  }
+  if(!silent)G.lwChart.timeScale().fitContent();
 }
 
 function updateHeader(sym){
@@ -2238,6 +2435,7 @@ function selectStock(sym){
 function setTF(range,interval,el){
   G.tf=range;G.tfi=interval;document.querySelectorAll('.tf').forEach(b=>b.classList.remove('on'));el.classList.add('on');
   const sym=G.sel;delete G.cans[sym];G.ld.delete(sym);G.ldg.delete(sym);
+  if(G.harmCache)delete G.harmCache[sym];if(G.ewCache)delete G.ewCache[sym];
   loadStock(sym,range,interval).then(()=>{calcInd(sym);updateHeader(sym);updateChart(sym);updateTradePlan(sym);});
 }
 
