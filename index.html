@@ -142,9 +142,13 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 .draw-btn:hover,.draw-tool-btn:hover{border-color:var(--pu);color:var(--pu)}
 .draw-btn.on{background:rgba(167,139,250,.15);border-color:var(--pu);color:var(--pu)}
 #draw-color{width:26px;height:26px;padding:0;border:1px solid var(--bd2);border-radius:4px;background:none;cursor:pointer}
-#chart-area.expanded{max-height:85vh}
+#chart-area.expanded{max-height:90vh}
 .filters-panel.collapsed-for-chart{width:0!important;min-width:0!important;padding:0;overflow:hidden;border:none}
 @media(max-width:900px){#chart-area.expanded{max-height:70vh}.filters-panel.collapsed-for-chart{display:none}}
+#chart-block:fullscreen{background:var(--c0);display:flex;flex-direction:column;padding:8px 0}
+#chart-block:fullscreen #chart-area{max-height:none;flex:1}
+#chart-block:-webkit-full-screen{background:var(--c0);display:flex;flex-direction:column;padding:8px 0}
+#chart-block:-webkit-full-screen #chart-area{max-height:none;flex:1}
 #csym{font-size:13px;font-weight:700;color:var(--bl)}
 #cprc{font-size:16px;font-weight:700;font-family:'IBM Plex Mono',monospace}
 #cchg{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:500;font-family:'IBM Plex Mono',monospace}
@@ -154,7 +158,7 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 .tf.on{background:var(--bl);border-color:var(--bl);color:#fff}
 
 /* Chart area */
-#chart-area{flex:1;position:relative;min-height:200px;max-height:52vh;overflow:hidden}
+#chart-area{flex:1;position:relative;min-height:260px;max-height:64vh;overflow:hidden}
 #lw-chart{position:absolute;top:0;left:0;width:100%;height:100%}
 
 /* AI Panel */
@@ -357,9 +361,11 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
         <button class="tf" onclick="setTF('1mo','1h',this)">شهر</button>
         <button class="tf on" onclick="setTF('3mo','1d',this)">3 أشهر</button>
         <button class="tf" onclick="setTF('6mo','1d',this)">6 أشهر</button>
-        <button class="tf" onclick="setTF('1y','1wk',this)">سنة</button>
+        <button class="tf" onclick="setTF('1y','1d',this)">سنة</button>
+        <button class="tf" onclick="setTF('2y','1d',this)">سنتين</button>
       </div>
     </div>
+    <div id="chart-block">
     <div class="pat-ctrl">
       <button class="pat-btn" id="pat-harm-btn" onclick="togglePattern('harm')"><span>🦋</span> هارمونيك</button>
       <button class="pat-btn" id="pat-ew-btn" onclick="togglePattern('ew')"><span>🌊</span> إيليوت</button>
@@ -376,6 +382,7 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
       <button class="draw-tool-btn" id="chart-expand-btn" onclick="toggleChartExpand()" style="margin-right:auto">⛶ تكبير</button>
     </div>
     <div id="chart-area"><div id="lw-chart"></div></div>
+    </div>
 
 
     <!-- Trade Plan Panel -->
@@ -1300,81 +1307,130 @@ function calcFVGRebalance(cs){
 function calcZigZag(cs,depth=4){if(!cs||cs.length<depth*2)return[];const n=cs.length,pvts=[];for(let i=depth;i<n-depth;i++){const isH=cs[i].high>=Math.max(...cs.slice(i-depth,i).map(c=>c.high))&&cs[i].high>=Math.max(...cs.slice(i+1,i+depth+1).map(c=>c.high));const isL=cs[i].low<=Math.min(...cs.slice(i-depth,i).map(c=>c.low))&&cs[i].low<=Math.min(...cs.slice(i+1,i+depth+1).map(c=>c.low));if(isH)pvts.push({i,p:cs[i].high,type:'H'});if(isL)pvts.push({i,p:cs[i].low,type:'L'});}pvts.sort((a,b)=>a.i-b.i);const clean=[];for(const pv of pvts){if(!clean.length){clean.push(pv);continue;}const last=clean[clean.length-1];if(last.type===pv.type){if(pv.type==='H'&&pv.p>last.p)clean[clean.length-1]=pv;else if(pv.type==='L'&&pv.p<last.p)clean[clean.length-1]=pv;}else{if(Math.abs(pv.p-last.p)/last.p*100>=0.3)clean.push(pv);}}return clean;}
 
 function detectHarmonic(cs){
-  const zz=calcZigZag(cs,3);if(zz.length<5)return null;
+  const zz=calcZigZag(cs,3);if(zz.length<4)return null;
   const DEFS=[['Gartley',.58,.65,.35,.9,1.2,1.7,.73,.82,true],['Bat',.35,.52,.35,.9,1.6,2.7,.82,.9,true],['Butterfly',.73,.82,.35,.9,1.6,2.26,1.25,1.4,false],['Crab',.35,.62,.35,.9,2.22,3.14,1.58,1.66,true],['Shark',.44,.52,1.1,1.65,1.6,2.26,.85,1.15,true],['Cypher',.38,.62,1.1,1.44,.7,.8,.77,.82,true]];
+
+  /* ══ 1) LIVE / STILL-FORMING SETUP — checked FIRST and preferred ══
+     X-A-B-C are the last 4 CONFIRMED zigzag pivots; D has genuinely not
+     happened yet — we measure the live/current price as a tentative D so
+     the user sees the setup with the last leg still open, *before* price
+     arrives at the target, instead of only ever seeing it after the fact. */
+  const tail=zz.slice(-4);
+  let live=null;
+  if(tail.length===4){
+    const[X,A,B,C]=tail;
+    const XA=Math.abs(A.p-X.p),AB=Math.abs(B.p-A.p),BC=Math.abs(C.p-B.p);
+    if(XA&&AB&&BC){
+      const rXAB=AB/XA,rABC=BC/AB;
+      const liveP=cs[cs.length-1].close;
+      const dirBC=Math.sign(C.p-B.p)||1,dirCD=-dirBC; /* CD alternates direction vs BC, standard harmonic structure */
+      const CD=Math.abs(liveP-C.p),rBCD=BC>0?CD/BC:0;
+      let bestLive=null,bestLiveScore=0;
+      for(const[name,xl,xh,al,ah,bl,bh,,,bull]of DEFS){
+        if(rXAB<xl||rXAB>xh||rABC<al||rABC>ah)continue;
+        if(rBCD>bh*1.08)continue; /* already blown well past the whole PRZ — no longer "still forming" */
+        const score=100-Math.abs(rXAB-(xl+xh)/2)/(xl+xh)*40-Math.abs(rABC-(al+ah)/2)/(al+ah)*30;
+        if(score>bestLiveScore){
+          bestLiveScore=score;
+          const zoneA=C.p+dirCD*bl*BC,zoneB=C.p+dirCD*bh*BC;
+          const zoneLo=Math.min(zoneA,zoneB),zoneHi=Math.max(zoneA,zoneB);
+          const bullish=bull?(dirCD<0):(dirCD>0);
+          const pts=[{i:X.i,time:cs[X.i].time,price:X.p,label:'X'},{i:A.i,time:cs[A.i].time,price:A.p,label:'A'},{i:B.i,time:cs[B.i].time,price:B.p,label:'B'},{i:C.i,time:cs[C.i].time,price:C.p,label:'C'},{i:cs.length-1,time:cs[cs.length-1].time,price:liveP,label:'D؟ (الآن)'}];
+          const pct=Math.max(0,Math.min(100,Math.round(rBCD/bl*100)));
+          bestLive={name,sig:bullish?'شراء':'بيع',forming:true,live:true,completion:Math.min(99,pct),score:Math.round(score),points:pts,
+            targets:{t1:+zoneLo.toFixed(2),t2:+zoneHi.toFixed(2),t3:+A.p.toFixed(2),sl:+(bullish?X.p-Math.abs(A.p-X.p)*0.06:X.p+Math.abs(A.p-X.p)*0.06).toFixed(2),bullish},
+            why:`نموذج ${name} ${bullish?'صعودي':'هبوطي'} — لسا ما اكتمل (${Math.min(99,pct)}%) — منطقة الارتداد المتوقعة (PRZ) بين ${Math.min(zoneA,zoneB).toFixed(2)} و ${Math.max(zoneA,zoneB).toFixed(2)} — النسب: XAB=${rXAB.toFixed(3)} ABC=${rABC.toFixed(3)}`};
+        }
+      }
+      live=bestLive;
+    }
+  }
+  if(live)return live;
+
+  /* ══ 2) Fallback: most recent COMPLETED pattern (all 5 points already
+     confirmed pivots) — shown only when no live/still-forming setup
+     qualifies, purely for historical reference. ══ */
   let best=null,bestScore=0;
-  /* X-A-B-C-D must be 5 CONSECUTIVE zigzag pivots in chronological order —
-     using a fixed/last D regardless of window caused duplicate or
-     out-of-order timestamps, which Lightweight Charts silently rejects
-     (the whole series/markers draw call fails and nothing appears). */
-  for(let xi=0;xi<=zz.length-5;xi++){const X=zz[xi],A=zz[xi+1],B=zz[xi+2],C=zz[xi+3],D=zz[xi+4];const XA=Math.abs(A.p-X.p);if(!XA)continue;const AB=Math.abs(B.p-A.p),BC=Math.abs(C.p-B.p),CD=Math.abs(D.p-C.p);if(!AB||!BC)continue;const rXAB=AB/XA,rABC=BC/AB,rBCD=BC>0?CD/BC:0;for(const[name,xl,xh,al,ah,bl,bh,xdl,xdh,bull]of DEFS){if(rXAB<xl||rXAB>xh||rABC<al||rABC>ah)continue;const bcdOk=rBCD>=bl&&rBCD<=bh,forming=!bcdOk&&rBCD>=bl*0.7;if(!bcdOk&&!forming)continue;const score=100-Math.abs(rXAB-(xl+xh)/2)/(xl+xh)*40-Math.abs(rABC-(al+ah)/2)/(al+ah)*30-Math.abs(rBCD-(bl+bh)/2)/(bl+bh)*30;if(score>bestScore){bestScore=score;const bullish=bull?(D.p<X.p):(D.p>X.p);
-    const pts=[{i:X.i,time:cs[X.i].time,price:X.p,label:'X'},{i:A.i,time:cs[A.i].time,price:A.p,label:'A'},{i:B.i,time:cs[B.i].time,price:B.p,label:'B'},{i:C.i,time:cs[C.i].time,price:C.p,label:'C'},{i:D.i,time:cs[D.i].time,price:D.p,label:'D'+(bcdOk?'':' (متوقعة)')}];
-    /* Reversal targets measured from D — standard harmonic trade management:
-       T1/T2 = partial retracements of the CD leg back toward C, T3 = full
-       retracement back to A. SL = beyond X with a small buffer. */
+  for(let xi=0;xi<=zz.length-5;xi++){const X=zz[xi],A=zz[xi+1],B=zz[xi+2],C=zz[xi+3],D=zz[xi+4];const XA=Math.abs(A.p-X.p);if(!XA)continue;const AB=Math.abs(B.p-A.p),BC=Math.abs(C.p-B.p),CD=Math.abs(D.p-C.p);if(!AB||!BC)continue;const rXAB=AB/XA,rABC=BC/AB,rBCD=BC>0?CD/BC:0;for(const[name,xl,xh,al,ah,bl,bh,,,bull]of DEFS){if(rXAB<xl||rXAB>xh||rABC<al||rABC>ah)continue;const bcdOk=rBCD>=bl&&rBCD<=bh;if(!bcdOk)continue;const score=100-Math.abs(rXAB-(xl+xh)/2)/(xl+xh)*40-Math.abs(rABC-(al+ah)/2)/(al+ah)*30-Math.abs(rBCD-(bl+bh)/2)/(bl+bh)*30;if(score>bestScore){bestScore=score;const bullish=bull?(D.p<X.p):(D.p>X.p);
+    const pts=[{i:X.i,time:cs[X.i].time,price:X.p,label:'X'},{i:A.i,time:cs[A.i].time,price:A.p,label:'A'},{i:B.i,time:cs[B.i].time,price:B.p,label:'B'},{i:C.i,time:cs[C.i].time,price:C.p,label:'C'},{i:D.i,time:cs[D.i].time,price:D.p,label:'D'}];
     const cdLen=C.p-D.p;
     const t1=D.p+0.382*cdLen,t2=D.p+0.618*cdLen,t3=A.p;
     const xaBuf=Math.abs(A.p-X.p)*0.06;
     const sl=bullish?X.p-xaBuf:X.p+xaBuf;
-    best={name,sig:bullish?'شراء':'بيع',forming:!bcdOk,completion:bcdOk?100:Math.min(99,Math.round(rBCD/bl*100)),score:Math.round(score),points:pts,
+    best={name,sig:bullish?'شراء':'بيع',forming:false,live:false,completion:100,score:Math.round(score),points:pts,
       targets:{t1:+t1.toFixed(2),t2:+t2.toFixed(2),t3:+t3.toFixed(2),sl:+sl.toFixed(2),bullish},
-      why:`نموذج ${name} ${bullish?'صعودي':'هبوطي'} — اكتمال ${bcdOk?100:Math.round(rBCD/bl*100)}% — النسب: XAB=${rXAB.toFixed(3)} ABC=${rABC.toFixed(3)} BCD=${rBCD.toFixed(3)}`};}}}
-  /* If the pattern is still forming (D not yet printed), extend the line
-     to the last candle's price so the projected D leg is visible. */
-  if(best&&best.forming){
-    const lastIdx=cs.length-1;
-    if(best.points[4].i<lastIdx){best.points[4]={...best.points[4],i:lastIdx,time:cs[lastIdx].time,price:cs[lastIdx].close};}
-  }
+      why:`نموذج ${name} ${bullish?'صعودي':'هبوطي'} — مكتمل بالكامل (تاريخي) — النسب: XAB=${rXAB.toFixed(3)} ABC=${rABC.toFixed(3)} BCD=${rBCD.toFixed(3)}`};}}}
   return best;
 }
 
 function detectElliott(cs){
   const cl=cs.map(c=>c.close),n=cl.length;if(n<30)return{sig:'محايد',wave:0,why:'بيانات غير كافية',points:[]};
+  const zz=calcZigZag(cs,3);
+
+  /* ══ Preferred: catch the wave at its START — take the last 3 confirmed
+     zigzag pivots (A→B an impulsive leg, B→C a pullback), check the
+     pullback is a Fibonacci-consistent correction (23.6%–85% of the
+     impulse), and if C is genuinely the most recent pivot (the next leg
+     hasn't run far yet), report this as a fresh launch point rather than
+     only recognizing the wave after it is already well underway. ══ */
+  if(zz.length>=3){
+    const[A,B,C]=zz.slice(-3);
+    const legAB=B.p-A.p,legBC=C.p-B.p;
+    if(legAB&&Math.sign(legBC)===-Math.sign(legAB)){
+      const retr=Math.abs(legBC/legAB);
+      if(retr>=0.236&&retr<=0.85){
+        const bullish=legAB>0;
+        const liveP=cl[n-1];
+        const progressed=(liveP-C.p)/legAB; /* how far into the NEXT leg we already are, as a fraction of the prior impulse */
+        const fresh=bullish?(liveP>=C.p):(liveP<=C.p); /* has the next leg even started moving the right way yet */
+        const freshness=Math.max(0,Math.min(150,Math.round(progressed*(bullish?1:-1)*100)));
+        const points=[
+          {i:A.i,time:cs[A.i].time,price:A.p,label:'1'},
+          {i:B.i,time:cs[B.i].time,price:B.p,label:'2'},
+          {i:C.i,time:cs[C.i].time,price:C.p,label:'3'},
+          {i:n-1,time:cs[n-1].time,price:liveP,label:'؟ (الآن)'}
+        ];
+        const targetExt=+(C.p+1.618*legAB).toFixed(2);
+        const targetEq=+(C.p+legAB).toFixed(2);
+        const stage=freshness<25?'بداية طازجة':freshness<80?'الموجة بدأت وتتقدم':'الموجة متقدمة جداً — الحذر من دخول متأخر';
+        return{
+          sig:bullish?'شراء':'بيع',wave:bullish?1:-1,
+          desc:`${bullish?'ارتداد صاعد':'ارتداد هابط'} بعد تصحيح ${(retr*100).toFixed(0)}%`,
+          why:`تصحيح ${(retr*100).toFixed(0)}% لموجة سابقة ثم استئناف الاتجاه ${bullish?'صعوداً':'هبوطاً'} — ${stage} (${freshness}% من طول الموجة المتوقعة قُطع فعلياً)`,
+          points,bullBias:bullish,fresh:freshness<50,
+          target:{price:targetExt,label:'هدف امتداد 1.618×',basis:'ext1618'},
+          target2:{price:targetEq,label:'هدف تعادل 1.0×',basis:'equality'}
+        };
+      }
+    }
+  }
+
+  /* ══ Fallback: broad ROC-based market-stage read when no clean fresh
+     pivot structure is available (still useful context, just not a
+     precise entry point). ══ */
   const roc=d=>n>d?((cl[n-1]-cl[n-1-d])/cl[n-1-d]*100):0;
   const r3=+roc(3).toFixed(2),r7=+roc(7).toFixed(2),r14=+roc(14).toFixed(2),r30=+roc(30).toFixed(2);
   let wave=0,sig='محايد',desc='',why='';
-  if(r30>10&&r14>5&&r7>2){wave=3;sig='شراء';desc='الموجة ③ الدافعة';why=`ROC30=+${r30}% ROC14=+${r14}% ROC7=+${r7}% ← الموجة الثالثة (أقوى موجات الصعود)`;}
+  if(r30>10&&r14>5&&r7>2){wave=3;sig='شراء';desc='الموجة ③ الدافعة';why=`ROC30=+${r30}% ROC14=+${r14}% ROC7=+${r7}% ← الموجة الثالثة (أقوى موجات الصعود) — تنبيه: قد تكون متقدمة، ليست بداية طازجة`;}
   else if(r30>6&&r7<0){wave=4;sig='محايد';desc='الموجة ④ تصحيحية';why=`صعود 30 يوم +${r30}% لكن تراجع أسبوعي ${r7}% ← تصحيح طبيعي`;}
   else if(r30>4&&r7>0&&r3<-1){wave=5;sig='بيع';desc='الموجة ⑤ نهاية';why=`الموجة الخامسة تستنفد — ROC3 سلبي ${r3}% ← نهاية الصعود`;}
   else if(r30<-8&&r14<-4){wave=-1;sig='بيع';desc='موجة C هبوطية';why=`هبوط حاد — ROC30=${r30}% ROC14=${r14}% ← موجة C تصحيحية`;}
   else if(r7>0&&r14<0){wave=1;sig='شراء';desc='الموجة ① بداية صعود';why=`انعكاس أسبوعي +${r7}% بعد هبوط ← بداية موجة صاعدة جديدة`;}
   else{why='لا موجة واضحة';}
 
-  /* Derive an actual pivot-point wave path from the zigzag so it can be
-     drawn on the chart — labeled either impulsively (0-1-2-3-4-5) or as a
-     corrective A-B-C, whichever the recent swing structure resembles. */
-  const zz=calcZigZag(cs,3);
+  const tail=zz.slice(-6);
   let points=[];
-  if(zz.length>=4){
-    const tail=zz.slice(-6); /* up to 6 pivots ≈ origin + up to 5 wave legs */
-    if(tail.length>=6){
-      const use=tail.slice(-6);
-      points=use.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4','5'][idx]}));
-    }else if(tail.length===5){
-      points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4'][idx]}));
-    }else if(tail.length===4){
-      points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','A','B','C'][idx]}));
-    }
-  }
-  /* Project the next expected move using the standard Elliott ratios:
-     wave 3 ≈ 1.618× wave 1 (measured from the wave-2 low/high), wave 5 ≈
-     wave 1 by equality (measured from the wave-4 low/high), corrective C
-     ≈ wave A by equality (measured from wave B). Falls back to no target
-     when the needed pivots aren't present. */
-  let target=null;
+  if(tail.length>=6)points=tail.slice(-6).map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4','5'][idx]}));
+  else if(tail.length===5)points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4'][idx]}));
+  else if(tail.length===4)points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','A','B','C'][idx]}));
+
   const byLbl=l=>points.find(p=>p.label===l);
   const p0=byLbl('0'),p1=byLbl('1'),p2=byLbl('2'),p4=byLbl('4'),pA=byLbl('A'),pB=byLbl('B');
-  if(p4&&p0&&p1){
-    const w1=p1.price-p0.price;
-    target={price:+(p4.price+w1).toFixed(2),label:'هدف الموجة ⑤ (تعادل مع الموجة ①)',basis:'equality'};
-  }else if(p2&&p0&&p1){
-    const w1=p1.price-p0.price;
-    target={price:+(p2.price+1.618*w1).toFixed(2),label:'هدف الموجة ③ (امتداد 1.618×)',basis:'ext1618'};
-  }else if(pB&&p0&&pA){
-    const wA=pA.price-p0.price;
-    target={price:+(pB.price+wA).toFixed(2),label:'هدف الموجة C (تعادل مع الموجة A)',basis:'equality'};
-  }
-  return{sig,wave,desc,why,points,bullBias:wave>0,target};
+  let target=null;
+  if(p4&&p0&&p1){const w1=p1.price-p0.price;target={price:+(p4.price+w1).toFixed(2),label:'هدف الموجة ⑤ (تعادل مع الموجة ①)',basis:'equality'};}
+  else if(p2&&p0&&p1){const w1=p1.price-p0.price;target={price:+(p2.price+1.618*w1).toFixed(2),label:'هدف الموجة ③ (امتداد 1.618×)',basis:'ext1618'};}
+  else if(pB&&p0&&pA){const wA=pA.price-p0.price;target={price:+(pB.price+wA).toFixed(2),label:'هدف الموجة C (تعادل مع الموجة A)',basis:'equality'};}
+  return{sig,wave,desc,why,points,bullBias:wave>0,target,fresh:false};
 }
 
 /* ══ LIMIT-UP HUNTER ══ */
@@ -2599,14 +2655,39 @@ function clearDrawings(){
   const sym=G.sel;G.draw[sym]=[];renderUserDrawings(sym);
 }
 function toggleChartExpand(){
-  const area=document.getElementById('chart-area');
-  const btn=document.getElementById('chart-expand-btn');
-  const expanded=area.classList.toggle('expanded');
-  document.getElementById('filters-panel')?.classList.toggle('collapsed-for-chart',expanded);
-  if(btn)btn.innerHTML=expanded?'⛶ تصغير':'⛶ تكبير';
-  /* ResizeObserver on #lw-chart already picks up the size change and
-     calls applyOptions({width,height}) automatically. */
+  const block=document.getElementById('chart-block');
+  const isFs=document.fullscreenElement||document.webkitFullscreenElement;
+  if(!isFs){
+    const req=block.requestFullscreen||block.webkitRequestFullscreen;
+    if(req){
+      req.call(block).catch(()=>_expandFallback(true));
+    }else{
+      _expandFallback(true);
+    }
+  }else{
+    (document.exitFullscreen||document.webkitExitFullscreen)?.call(document);
+  }
 }
+function _expandFallback(on){
+  const area=document.getElementById('chart-area');
+  area.classList.toggle('expanded',on);
+  document.getElementById('filters-panel')?.classList.toggle('collapsed-for-chart',on);
+  _setExpandBtnLabel(on);
+}
+function _setExpandBtnLabel(on){
+  const btn=document.getElementById('chart-expand-btn');
+  if(btn)btn.innerHTML=on?'⛶ تصغير':'⛶ تكبير';
+}
+document.addEventListener('fullscreenchange',()=>{
+  const on=!!document.fullscreenElement;
+  _setExpandBtnLabel(on);
+  if(G.lwChart){const ct=document.getElementById('lw-chart');G.lwChart.applyOptions({width:ct.clientWidth,height:ct.clientHeight});}
+});
+document.addEventListener('webkitfullscreenchange',()=>{
+  const on=!!document.webkitFullscreenElement;
+  _setExpandBtnLabel(on);
+  if(G.lwChart){const ct=document.getElementById('lw-chart');G.lwChart.applyOptions({width:ct.clientWidth,height:ct.clientHeight});}
+});
 
 /* ══ PATTERN OVERLAY (Harmonic / Elliott) — draws the actual detected
    structure on the main chart so the user can see its shape, whether or
@@ -2674,22 +2755,27 @@ function drawPattern(mode,silent){
   const aP=(price,title,color,style)=>{try{_patTargetLines.push(G.cSeries.createPriceLine({price,title,color,lineWidth:1.5,lineStyle:style||2,axisLabelVisible:true}));}catch(e){}};
   if(mode==='harm'&&data.targets){
     const t=data.targets;
-    aP(t.t1,'هدف 1',col,2);
-    aP(t.t2,'هدف 2',col,2);
+    aP(t.t1,data.live?'حافة PRZ 1':'هدف 1',col,2);
+    aP(t.t2,data.live?'حافة PRZ 2':'هدف 2',col,2);
     aP(t.t3,'هدف 3 (A)',col,1);
-    aP(t.sl,'وقف الخسارة',mode==='harm'?'#f04458':'#f04458',0);
-  }else if(mode==='ew'&&data.target){
-    aP(data.target.price,data.target.label,col,2);
+    aP(t.sl,'وقف الخسارة','#f04458',0);
+  }else if(mode==='ew'){
+    if(data.target)aP(data.target.price,data.target.label,col,2);
+    if(data.target2)aP(data.target2.price,data.target2.label,col,1);
   }
   const info=document.getElementById('pat-info');
   if(info){
     if(mode==='harm'){
       const t=data.targets;
-      const tgTxt=t?`<br><b>🎯 الأهداف:</b> هدف1=${t.t1} · هدف2=${t.t2} · هدف3(A)=${t.t3} — <b>وقف الخسارة:</b> ${t.sl}`:'';
-      info.innerHTML=`<b>🦋 نموذج ${data.name}</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'} ${data.forming?'(قيد التكوّن، لم يكتمل بعد — الخط المتقطع يمثل الامتداد المتوقع لنقطة D)':'(مكتمل)'} — اكتمال ${data.completion}%<br>${data.why}${tgTxt}`;
+      const tgTxt=t?(data.live
+        ?`<br><b>🎯 منطقة الارتداد المتوقعة (PRZ):</b> بين ${t.t1} و ${t.t2} · هدف نهائي(A)=${t.t3} — <b>وقف الخسارة:</b> ${t.sl}`
+        :`<br><b>🎯 الأهداف:</b> هدف1=${t.t1} · هدف2=${t.t2} · هدف3(A)=${t.t3} — <b>وقف الخسارة:</b> ${t.sl}`):'';
+      const stateTxt=data.live?'<b style="color:#f5c842">⏳ لسا ما وصل الهدف — راقب منطقة الـ PRZ</b>':data.forming?'(قيد التكوّن)':'(مكتمل — تاريخي)';
+      info.innerHTML=`<b>🦋 نموذج ${data.name}</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'} ${stateTxt} — اكتمال ${data.completion}%<br>${data.why}${tgTxt}`;
     }else{
-      const tgTxt=data.target?`<br><b>🎯 ${data.target.label}:</b> ${data.target.price}`:'<br><span style="color:var(--t3)">لا يوجد هدف واضح في هذه المرحلة من الموجة</span>';
-      info.innerHTML=`<b>🌊 إيليوت</b> — ${data.desc||'—'} ${data.wave!==0?`(${data.sig})`:''}<br>${data.why}${tgTxt}`;
+      const freshTxt=data.fresh?'<span style="color:#0ecf7e"><b>🟢 بداية طازجة — فرصة دخول مبكرة</b></span><br>':(data.fresh===false&&data.target?'<span style="color:#f5c842">⚠️ الموجة متقدمة، ليست بداية جديدة</span><br>':'');
+      const tgTxt=data.target?`<b>🎯 ${data.target.label}:</b> ${data.target.price}${data.target2?` · <b>${data.target2.label}:</b> ${data.target2.price}`:''}`:'<span style="color:var(--t3)">لا يوجد هدف واضح في هذه المرحلة</span>';
+      info.innerHTML=`<b>🌊 إيليوت</b> — ${data.desc||'—'} ${data.wave!==0?`(${data.sig})`:''}<br>${freshTxt}${data.why}<br>${tgTxt}`;
     }
     info.classList.add('show');
   }
