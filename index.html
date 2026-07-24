@@ -322,6 +322,7 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
       <div class="ftab" onclick="setFilter('sniper',this)"><span class="ficon">🎯</span> قناص ما قبل الانطلاق <span class="fbadge" id="fb-sniper" style="background:rgba(167,139,250,.12);color:var(--pu);border-color:rgba(167,139,250,.25)">0</span></div>
       <div class="ftab" onclick="setFilter('fib618',this)"><span class="ficon">📐</span> ارتداد فيبوناتشي ٦١.٨٪ <span class="fbadge" id="fb-fib618" style="background:rgba(14,207,126,.12);color:var(--up);border-color:rgba(14,207,126,.25)">0</span></div>
       <div class="ftab" onclick="setFilter('master',this)" style="order:-1"><span class="ficon">🏆</span> الأقوى (مرتبة موحّدة) <span class="fbadge" id="fb-master" style="background:rgba(255,180,0,.15);color:#ffb400;border-color:rgba(255,180,0,.3)">0</span></div>
+      <div class="ftab" onclick="setFilter('whale',this)" style="order:-1;background:rgba(45,212,191,.08);border-color:rgba(45,212,191,.3)"><span class="ficon">🐋</span> قاع الحيتان <span class="fbadge" id="fb-whale" style="background:rgba(45,212,191,.15);color:#2dd4bf;border-color:rgba(45,212,191,.3)">0</span></div>
       <div class="ftab" onclick="setFilter('macd',this)"><span class="ficon">📊</span> تقاطع ماكد <span class="fbadge" id="fb-macd" style="background:rgba(96,165,250,.12);color:#60a5fa;border-color:rgba(96,165,250,.25)">0</span></div>
       <div class="ftab" onclick="setFilter('instvol',this)"><span class="ficon">🏦</span> حجم مؤسسي <span class="fbadge" id="fb-instvol" style="background:rgba(251,146,60,.12);color:#fb923c;border-color:rgba(251,146,60,.25)">0</span></div>
       <div class="ftab" onclick="setFilter('revcandle',this)"><span class="ficon">🕯️</span> شمعة انعكاسية <span class="fbadge" id="fb-revcandle" style="background:rgba(236,72,153,.12);color:#ec4899;border-color:rgba(236,72,153,.25)">0</span></div>
@@ -425,7 +426,7 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
       <button class="ib-btn ib-btn-s" id="ib-fg" onclick="ibF('gold',this)">🥇 ذهبية</button>
       <button class="ib-btn ib-btn-s" id="ib-ft" onclick="ibF('time',this)">⏱ توافق زمني</button>
       <button class="ib-btn ib-btn-s" id="ib-fsn" onclick="ibF('sniper',this)">🎯 قناص</button>
-      <button class="ib-btn ib-btn-s" id="ib-fsn" onclick="ibF('sniper',this)">🎯 قناص</button>
+      <button class="ib-btn ib-btn-s" id="ib-fwh" onclick="ibF('whale',this)" style="color:#2dd4bf">🐋 قاع الحيتان</button>
       <span class="ib-lbl">المخاطرة:</span>
       <select class="ib-inp" id="ib-rk" style="width:48px"><option value="1" selected>1%</option><option value="2">2%</option><option value="3">3%</option></select>
       <span class="ib-lbl">رأس المال:</span>
@@ -445,6 +446,7 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
       <div class="ib-ai-i"><span class="ib-ai-l">نسبة الفوز</span><span class="ib-ai-v" id="ai-wr" style="color:var(--up)">—</span></div>
       <div class="ib-ai-i"><span class="ib-ai-l">R:R</span><span class="ib-ai-v" id="ai-rr">—</span></div>
       <div class="ib-ai-i"><span class="ib-ai-l">🎯 فوز Sniper الحقيقي</span><span class="ib-ai-v" id="ai-sniper-wr" style="color:var(--pu)">—</span></div>
+      <div class="ib-ai-i"><span class="ib-ai-l">🐋 فوز قاع الحيتان</span><span class="ib-ai-v" id="ai-whale-wr" style="color:#2dd4bf">—</span></div>
       <div class="ib-ai-i"><span class="ib-ai-l">الأوزان</span><span class="ib-ai-v" id="ai-w" style="color:var(--pu)">1.0</span></div>
       <div class="ib-ai-i"><span class="ib-ai-l">تحسين</span><span class="ib-ai-v" id="ai-dt">—</span></div>
     </div>
@@ -1027,7 +1029,7 @@ const Tm=()=>{const d=new Date();return`${String(d.getHours()).padStart(2,'0')}:
 const G={sel:'2222',tf:'3mo',tfi:'1d',pr:{},op:{},hi:{},lo:{},vo:{},ch:{},pc:{},cans:{},ind:{},sc:{},ld:new Set(),ldg:new Set(),lwChart:null,cSeries:null,vSeries:null,series:{}};
 let _filter='all',_buyOnly=false,_sellOnly=false,_alertOnly=false,_sortCol='master',_sortDir=-1,_showBearish=false;
 let _visibleSyms=[],_focusedIdx=-1,_pinnedSym=null;
-const TAB_ORDER=['all','vz','ma','rs','sq','ab','fg','hidden','pregap','fvgr','elliott','harmonic','hunter','time','sniper','fib618','master','macd','instvol','revcandle'];
+const TAB_ORDER=['all','vz','ma','rs','sq','ab','fg','hidden','pregap','fvgr','elliott','harmonic','hunter','time','sniper','whale','fib618','master','macd','instvol','revcandle'];
 let _advData=[],_aiOpen=false,_zoomLevel=100;
 let _whyOpen={};
 
@@ -1603,6 +1605,74 @@ function calcOBVDivergence(cs){
    Fires "high" only when 3+ of the 4 independent signals agree —
    this is intentionally strict: each piece alone is weak evidence,
    but their CONFLUENCE is the actual edge. */
+/* ══════════════════════════════════════════════════════════════
+   🐋 رادار قاع الحيتان (WHALE BOTTOM RADAR) — a dedicated composite
+   that specifically hunts for stocks sitting NEAR A GENUINE LOW while
+   showing quiet accumulation fingerprints. This is deliberately
+   DIFFERENT from the general Pre-Breakout Sniper above: Sniper can
+   fire on a base forming ANYWHERE (including near highs, e.g. a flag
+   continuation) — this one REQUIRES the stock to actually be sitting
+   in the lower part of its recent range. That's the whole point: catch
+   it before it leaves the bottom, not celebrate a breakout mid-air.
+   ══════════════════════════════════════════════════════════════ */
+function calcSmartBottom(cs){
+  if(!cs||cs.length<40)return{score:0,alert:false,nearLow:false,rangePos:50,why:'بيانات غير كافية'};
+  const n=cs.length;
+  const lookback=Math.min(120,n-1);
+  const seg=cs.slice(n-lookback);
+  const segLow=Math.min(...seg.map(c=>c.low));
+  const segHigh=Math.max(...seg.map(c=>c.high));
+  const cur=cs[n-1].close;
+  const distFromLow=segLow>0?((cur-segLow)/segLow)*100:0;
+  const rangePos=segHigh>segLow?((cur-segLow)/(segHigh-segLow))*100:50; /* 0=sitting at the low, 100=at the high */
+
+  const vcp=calcVCP(cs);
+  const vdu=calcVolumeDryUp(cs);
+  const ab=calcVolumeAbsorption(cs);
+  const hidden=calcHiddenLiquidity(cs);
+  const obv=calcOBVDivergence(cs);
+  const revCandle=calcReversalCandle(cs);
+
+  const rsiArr=calcRSI(cs.map(c=>c.close),14);
+  const rsiNow=rsiArr[rsiArr.length-1]??50;
+  const rsiPrev=rsiArr[Math.max(0,rsiArr.length-6)]??rsiNow;
+  const rsiRecovering=rsiPrev<42&&rsiNow>rsiPrev+2&&rsiNow<62;
+
+  const zz=calcZigZag(cs,3);
+  const lows=zz.filter(p=>p.type==='L').slice(-3);
+  const higherLows=lows.length>=2&&lows.every((p,i)=>i===0||p.p>=lows[i-1].p*0.985);
+
+  const nearLow=rangePos<=30; /* sitting in the lower third of its recent range */
+
+  let score=0;
+  score+=nearLow?22:0;
+  score+=Math.min(22,vcp.score*0.22);
+  score+=Math.min(18,vdu.score*0.18);
+  score+=(ab.alert&&ab.score>0)?12:0;
+  score+=hidden.alert?12:0;
+  score+=obv.bullDiv?16:0;
+  score+=rsiRecovering?10:0;
+  score+=higherLows?10:0;
+  score+=(revCandle.active&&revCandle.bullish)?8:0;
+  score=Math.max(0,Math.min(100,Math.round(score)));
+
+  const alert=nearLow&&score>=58;
+
+  const reasons=[`السعر عند ${rangePos.toFixed(0)}% من مدى آخر ${lookback} شمعة (0%=القاع، 100%=القمة)`];
+  if(vcp.contractions>=2)reasons.push(`انضغاط تقلب VCP (${vcp.contractions} مراحل) ← طاقة مكبوتة`);
+  if(vdu.score>=40)reasons.push('جفاف سيولة ثم نشاط مفاجئ');
+  if(ab.alert&&ab.score>0)reasons.push('امتصاص عروض بيع مؤسسي');
+  if(hidden.alert)reasons.push('أوامر جبلية / تجميع هامور مكتشف');
+  if(obv.bullDiv)reasons.push('تجميع خفي (OBV يصعد والسعر شبه ثابت)');
+  if(rsiRecovering)reasons.push(`RSI يتعافى من تشبع بيعي (${rsiPrev.toFixed(0)}→${rsiNow.toFixed(0)})`);
+  if(higherLows)reasons.push('قيعان متصاعدة (بداية تكوين قاع)');
+  if(revCandle.active&&revCandle.bullish)reasons.push(`شمعة ${revCandle.pattern} عند القاع`);
+
+  return{score,alert,nearLow,distFromLow:+distFromLow.toFixed(1),rangePos:+rangePos.toFixed(0),
+    vcp,vdu,ab,hidden,obv,rsiNow:+rsiNow.toFixed(0),higherLows,revCandle,
+    why:reasons.join(' · ')};
+}
+
 function preBreakoutSniper(cs,ind,tat){
   const vcp=calcVCP(cs);
   const vdu=calcVolumeDryUp(cs);
@@ -2112,6 +2182,10 @@ function calcAllFilters(sym,marketROC){
      OBV hidden-accumulation divergence + Time Confluence (reuses tat) */
   const snp=preBreakoutSniper(cs,G.ind[sym],tat);
 
+  /* 🐋 WHALE BOTTOM RADAR — same building blocks as Sniper, but gated
+     specifically on the stock sitting near a genuine recent low */
+  const sb=calcSmartBottom(cs);
+
   let bullAlerts=0,bearAlerts=0;
   if(vz.alert){vz.bullish?bullAlerts++:bearAlerts++;}
   if(ma.alert){ma.accel>0?bullAlerts++:bearAlerts++;}
@@ -2131,6 +2205,7 @@ function calcAllFilters(sym,marketROC){
   if(macdX.active){macdX.bullish?bullAlerts++:bearAlerts++;}
   if(instVol.active){instVol.bullish?bullAlerts++:bearAlerts++;}
   if(revCandle.active){revCandle.bullish?bullAlerts++:bearAlerts++;}
+  if(sb.alert)bullAlerts++;/* 🐋 whale accumulation near a genuine low — bullish only by definition */
 
   let sig='—',cls='sig-watch';
   if(bullAlerts>=6){sig='▲ شراء قوي جداً';cls='sig-buy';}
@@ -2171,6 +2246,7 @@ function calcAllFilters(sym,marketROC){
   masterScore+=macdX.active?(macdX.bullish?(macdX.strengthening?7:5):-6):0;
   masterScore+=instVol.active?(instVol.bullish?7:-7):0;
   masterScore+=revCandle.active?(revCandle.bullish?6:-6):0;
+  masterScore+=sb.alert?13:0;
   masterScore+=tat.sniperBonus?(tat.dirUp?14:-14):0;
   masterScore+=snp.level==='high'?(snp.dirUp?16:-16):0;
   masterScore+=fib618.confirmed?15:0;
@@ -2181,7 +2257,7 @@ function calcAllFilters(sym,marketROC){
   if(heavyConfirmCount>=3)masterScore+=10;
   masterScore=Math.max(0,Math.min(100,Math.round(masterScore)));
 
-  return{sym,vz,ma,rs,sq,ab,fg,hidden,pregap,fvgr,ew,harm,hunter,tat,snp,fib618,macdX,instVol,revCandle,sig,cls,score,masterScore,bullAlerts,bearAlerts};
+  return{sym,vz,ma,rs,sq,ab,fg,hidden,pregap,fvgr,ew,harm,hunter,tat,snp,sb,fib618,macdX,instVol,revCandle,sig,cls,score,masterScore,bullAlerts,bearAlerts};
 }
 
 /* ══ SCAN ENGINE ══ */
@@ -2232,6 +2308,8 @@ function updateBadges(){
   const fbSniper=document.getElementById('fb-sniper');if(fbSniper)fbSniper.textContent=sniperActive;
   const fib618Active=_advData.filter(d=>d.fib618?.confirmed).length;
   const fbFib618=document.getElementById('fb-fib618');if(fbFib618)fbFib618.textContent=fib618Active;
+  const whaleActive=_advData.filter(d=>d.sb?.alert).length;
+  const fbWhale=document.getElementById('fb-whale');if(fbWhale)fbWhale.textContent=whaleActive;
 }
 
 /* ══ FILTER & SORT ══ */
@@ -2240,6 +2318,7 @@ function setFilter(f,el){
   document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('on'));
   el.classList.add('on');
   if(f==='master'){_sortCol='master';_sortDir=-1;}/* always rank strongest-first when entering the unified tab */
+  if(f==='whale'){_sortCol='sb_s';_sortDir=-1;}
   renderResults();
 }
 function toggleBuySell(type,btn){
@@ -2353,6 +2432,7 @@ function getHeaders(){
     macd:`${base}<th>الهيستوجرام</th><th>يتقوى؟</th><th>الحالة</th>${end}`,
     instvol:`${base}<th onclick="sortResults('iv_r')">مضاعف الحجم</th><th>موضع الإغلاق</th><th>الحالة</th>${end}`,
     revcandle:`${base}<th>النمط</th><th>الموقع</th><th>الحالة</th>${end}`,
+    whale:`${base}<th onclick="sortResults('sb_s')">🐋 درجة القاع</th><th>الموقع بالمدى</th><th>الحالة</th>${end}`,
   };
   return cols[_filter]||cols.all;
 }
@@ -2388,6 +2468,7 @@ function renderResults(){
       if(_filter==='macd')return d.macdX.active&&(_showBearish?!d.macdX.bullish:d.macdX.bullish);
       if(_filter==='instvol')return d.instVol.active&&(_showBearish?d.instVol.bearish:d.instVol.bullish);
       if(_filter==='revcandle')return d.revCandle.active&&(_showBearish?d.revCandle.bearish:d.revCandle.bullish);
+      if(_filter==='whale')return d.sb.alert;
       return true;
     });
   }
@@ -2413,6 +2494,7 @@ function renderResults(){
       case'fib_s':av=a.fib618.score;bv=b.fib618.score;break;
       case'master':av=a.masterScore;bv=b.masterScore;break;
       case'iv_r':av=a.instVol.volRatio;bv=b.instVol.volRatio;break;
+      case'sb_s':av=a.sb.score;bv=b.sb.score;break;
       default:av=a.masterScore;bv=b.masterScore;
     }
     return((+av||0)>(+bv||0)?1:(+av||0)<(+bv||0)?-1:0)*_sortDir;
@@ -2477,6 +2559,8 @@ function renderResults(){
     }else if(_filter==='revcandle'){
       const rcCol=d.revCandle.bullish?'s4':d.revCandle.bearish?'s1':'na';
       midCols=`<td>${d.revCandle.pattern||'—'}</td><td>${d.revCandle.bullish?'قاع محلي':d.revCandle.bearish?'قمة محلية':'—'}</td><td>${tag(rcCol,d.revCandle.sig)}</td>`;
+    }else if(_filter==='whale'){
+      midCols=`<td><span class="scb"><span class="scf" style="width:${d.sb.score}%;background:${d.sb.score>=70?'#2dd4bf':d.sb.score>=50?'var(--gd)':'var(--t2)'}"></span></span> ${d.sb.score}</td><td style="font-family:monospace">${d.sb.rangePos}%</td><td>${tag(d.sb.alert?'s4':'na',d.sb.alert?'🐋 تجميع عند القاع':'—')}</td>`;
     }
 
     const scoreForBar=d.masterScore;
@@ -2488,7 +2572,7 @@ function renderResults(){
       <td style="color:${pcCol};font-family:monospace">${d.pct>=0?'+':''}${d.pct.toFixed(2)}%</td>
       ${midCols}
       <td><span class="scb"><span class="scf" style="width:${d.masterScore}%;background:${d.masterScore>=75?'var(--up)':d.masterScore>=55?'var(--gd)':d.masterScore>=35?'var(--t2)':'var(--dn)'}"></span></span><b>${d.masterScore}</b></td>
-      <td><span class="${d.cls}" style="font-weight:700">${d.sig}</span>${d.tat.sniperBonus?` <span class="tag tag-${d.tat.dirUp?'s4':'s1'}" style="font-size:8px" title="${d.tat.reason}">⏱</span>`:d.tat.penalty?` <span class="tag tag-s1" style="font-size:8px" title="${d.tat.reason}">⚠⏱</span>`:''}${d.snp.level==='high'?` <span class="tag tag-${d.snp.dirUp?'s4':'s1'}" style="font-size:8px;background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.3);color:var(--pu)" title="${d.snp.why}">🎯</span>`:''}${d.fib618.confirmed?` <span class="tag tag-s4" style="font-size:8px;background:rgba(14,207,126,.12);border-color:rgba(14,207,126,.3);color:var(--up)" title="${d.fib618.why}">📐</span>`:''}</td>
+      <td><span class="${d.cls}" style="font-weight:700">${d.sig}</span>${d.tat.sniperBonus?` <span class="tag tag-${d.tat.dirUp?'s4':'s1'}" style="font-size:8px" title="${d.tat.reason}">⏱</span>`:d.tat.penalty?` <span class="tag tag-s1" style="font-size:8px" title="${d.tat.reason}">⚠⏱</span>`:''}${d.snp.level==='high'?` <span class="tag tag-${d.snp.dirUp?'s4':'s1'}" style="font-size:8px;background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.3);color:var(--pu)" title="${d.snp.why}">🎯</span>`:''}${d.fib618.confirmed?` <span class="tag tag-s4" style="font-size:8px;background:rgba(14,207,126,.12);border-color:rgba(14,207,126,.3);color:var(--up)" title="${d.fib618.why}">📐</span>`:''}${d.sb.alert?` <span class="tag tag-s4" style="font-size:8px;background:rgba(45,212,191,.12);border-color:rgba(45,212,191,.3);color:#2dd4bf" title="${d.sb.why}">🐋</span>`:''}</td>
       <td><button onclick="event.stopPropagation();toggleWhy('${d.sym}')" style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.2);color:var(--pu);padding:1px 8px;border-radius:3px;cursor:pointer;font-size:calc(var(--base-font)*0.75);font-family:inherit">لماذا؟</button></td>
     </tr>
     <tr class="why-row ${_whyOpen[d.sym]?'show':''}" id="why-${d.sym}">
@@ -2513,6 +2597,7 @@ function renderResults(){
           ${d.harm?`<div class="why-item ${d.harm.sig==='شراء'?'bull':'bear'}"><b>🦋 هارمونيك:</b> <span class="val">${d.harm.why}</span></div>`:''}
           ${d.hunter.alerts.length>0?`<div class="why-item bull"><b>🎪 صيد النسبة:</b> <span class="val">${d.hunter.why}</span></div>`:''}
           ${d.fib618.confirmed||d.fib618.inZone?`<div class="why-item ${d.fib618.confirmed?'bull':'neu'}"><b>📐 ارتداد فيبوناتشي ٦١.٨٪:</b> <span class="val">${d.fib618.why}</span></div>`:''}
+          ${d.sb.alert?`<div class="why-item bull"><b>🐋 قاع الحيتان:</b> <span class="val">${d.sb.why}</span></div>`:''}
         </div>
       </td>
     </tr>`;
@@ -2971,7 +3056,7 @@ const AI={
      lets us compute a SEPARATE, measured win-rate for this strategy instead
      of guessing a number, exactly as promised to the user. */
   log(t){
-    const tag=t.snp?.level==='high'?'sniper':t.snp?.level==='medium'?'sniper_watch':'general';
+    const tag=t.sb?.alert?'whale':t.snp?.level==='high'?'sniper':t.snp?.level==='medium'?'sniper_watch':'general';
     this.sigs.push({y:t.sym,t:t.type,e:t.entry,s:t.sl,p:t.tp1,sc:t.ss,tag,ts:Date.now()});
     this.save();
   },
@@ -3001,6 +3086,11 @@ const AI={
     const sniperSigs=recent.filter(s=>s.tag==='sniper');
     const sniperEval=this._evalSlice(sniperSigs);
     r.sniperWr=sniperEval.wr;r.sniperRr=sniperEval.rr;r.sniperN=sniperSigs.length;r.sniperEvaluated=sniperEval.evaluated;
+
+    /* 🐋 Separate, REAL win-rate for Whale Bottom Radar signals specifically */
+    const whaleSigs=recent.filter(s=>s.tag==='whale');
+    const whaleEval=this._evalSlice(whaleSigs);
+    r.whaleWr=whaleEval.wr;r.whaleRr=whaleEval.rr;r.whaleN=whaleSigs.length;r.whaleEvaluated=whaleEval.evaluated;
 
     r.w=Object.entries(this.W).map(([k,v])=>`${k}:${v}`).join(' ');
     return r;
@@ -3240,6 +3330,15 @@ function genTrade(sym){
     R.push({t:`${snp.badge}`});
   }
 
+  /* 🐋 WHALE BOTTOM RADAR — same building blocks as Sniper, but gated on
+     the stock genuinely sitting near a recent low (not just any base),
+     same composite engine as the filter scan */
+  const sb=calcSmartBottom(cs);
+  if(sb.alert){
+    bu+=16;/* whale accumulation near a genuine low is bullish only by definition */
+    R.push({t:`🐋 قاع الحيتان (${sb.score})`});
+  }
+
   /* Decision */
   let type=null;
   const diff=Math.abs(bu-be);
@@ -3314,7 +3413,7 @@ function genTrade(sym){
     R,rr1,rr2:+(Math.abs(tp2-entry)/risk).toFixed(2),risk:+risk.toFixed(2),ps,pv:+(ps*entry).toFixed(0),rkA:+rkA.toFixed(0),rkP,
     ts:+(lFL?.p||sl).toFixed(2),atr:+atr.toFixed(2),
     reg:E.l.rg.r,ft:mFT,al:{tL,tM,tS,pf:allB||allD},
-    lq,tp,cm:E.l.cm,of:E.l.of,bh:E.l.bh,tm:E.l.tm,tat,snp,
+    lq,tp,cm:E.l.cm,of:E.l.of,bh:E.l.bh,tm:E.l.tm,tat,snp,sb,
     price:cur,pct:G.pc[sym]||0,name:NAMES[sym]||sym};
 }
 
@@ -3359,6 +3458,18 @@ function showAI(r){
       sw.style.color='var(--t2)';
     }
   }
+  /* 🐋 Whale-specific measured win-rate — same rule: only show a number
+     once enough whale-bottom signals have actually been logged/evaluated */
+  const ww=document.getElementById('ai-whale-wr');
+  if(ww){
+    if(r.whaleN>=3&&r.whaleEvaluated>=2){
+      ww.textContent=r.whaleWr+'% ('+r.whaleEvaluated+')';
+      ww.style.color=r.whaleWr>=55?'var(--up)':r.whaleWr>0?'var(--dn)':'var(--t2)';
+    }else{
+      ww.textContent=`يحتاج بيانات (${r.whaleN||0})`;
+      ww.style.color='var(--t2)';
+    }
+  }
 }
 
 function updDash(){
@@ -3384,6 +3495,7 @@ function renderIB(){
   if(_ibFl==='gold')sg=sg.filter(t=>t.gold==='gold');
   if(_ibFl==='time')sg=sg.filter(t=>t.tat?.sniperBonus);
   if(_ibFl==='sniper')sg=sg.filter(t=>t.snp?.level==='high');
+  if(_ibFl==='whale')sg=sg.filter(t=>t.sb?.alert);
   if(!sg.length){document.getElementById('ib-sg').innerHTML='<div class="ib-empty"><div class="ib-empty-i">🧠</div><div style="font-size:11px;color:var(--t2)">لا إشارات</div></div>';return;}
   const cards=sg.slice(0,40).map(t=>{
     const ib=t.type==='BUY';
