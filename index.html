@@ -156,6 +156,9 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 .tf{padding:2px 7px;border:1px solid var(--bd2);background:none;border-radius:2px;color:var(--t2);cursor:pointer;font-size:9px;font-family:inherit;transition:all .1s}
 .tf:hover{border-color:var(--bl);color:var(--bl)}
 .tf.on{background:var(--bl);border-color:var(--bl);color:#fff}
+.tf-interval{padding:2px 9px;border:1px solid var(--bd2);background:none;border-radius:2px;color:var(--t2);cursor:pointer;font-size:9px;font-family:inherit;transition:all .1s;font-weight:700}
+.tf-interval:hover{border-color:#2dd4bf;color:#2dd4bf}
+.tf-interval.on{background:#2dd4bf;border-color:#2dd4bf;color:#062b26}
 
 /* Chart area */
 #chart-area{flex:1;position:relative;min-height:260px;max-height:64vh;overflow:hidden}
@@ -365,11 +368,18 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
         <button class="tf" onclick="setTF('1y','1d',this)">سنة</button>
         <button class="tf" onclick="setTF('2y','1d',this)">سنتين</button>
       </div>
+      <div class="tfs" style="margin-right:0;border-right:1px solid var(--bd);padding-right:8px">
+        <span style="font-size:9px;color:var(--t3);align-self:center;padding:0 4px">الفريم:</span>
+        <button class="tf-interval on" data-itv="1d" onclick="setChartInterval('1d',this)">يومي</button>
+        <button class="tf-interval" data-itv="1h" onclick="setChartInterval('1h',this)">ساعة</button>
+      </div>
     </div>
     <div id="chart-block">
     <div class="pat-ctrl">
       <button class="pat-btn" id="pat-harm-btn" onclick="togglePattern('harm')"><span>🦋</span> هارمونيك</button>
       <button class="pat-btn" id="pat-ew-btn" onclick="togglePattern('ew')"><span>🌊</span> إيليوت</button>
+      <button class="pat-btn" id="pat-wolfe-btn" onclick="togglePattern('wolfe')"><span>🐺</span> موجة الذئب</button>
+      <button class="pat-btn" id="pat-chan-btn" onclick="togglePattern('channel')"><span>📐</span> القناة السعرية</button>
       <button class="pat-clear" onclick="clearPatterns()">مسح الرسم ✕</button>
     </div>
     <div class="pat-info" id="pat-info"></div>
@@ -1383,13 +1393,20 @@ function detectElliott(cs){
       if(retr>=0.236&&retr<=0.85){
         const bullish=legAB>0;
         const liveP=cl[n-1];
-        const progressed=(liveP-C.p)/legAB; /* how far into the NEXT leg we already are, as a fraction of the prior impulse */
-        const fresh=bullish?(liveP>=C.p):(liveP<=C.p); /* has the next leg even started moving the right way yet */
-        const freshness=Math.max(0,Math.min(150,Math.round(progressed*(bullish?1:-1)*100)));
+        /* progressed already correctly reflects "how far along the expected
+           next leg" for EITHER direction, because dividing by the signed
+           legAB cancels the sign automatically:
+             bullish (legAB>0): liveP>C.p (rising) → positive/positive → +
+             bearish (legAB<0): liveP<C.p (falling) → negative/negative → +
+           A previous version re-multiplied by an extra ±1 here, which
+           double-flipped the bearish case and clamped it to 0 no matter
+           how far the move had actually progressed. */
+        const progressed=(liveP-C.p)/legAB;
+        const freshness=Math.max(0,Math.min(150,Math.round(progressed*100)));
         const points=[
-          {i:A.i,time:cs[A.i].time,price:A.p,label:'1'},
-          {i:B.i,time:cs[B.i].time,price:B.p,label:'2'},
-          {i:C.i,time:cs[C.i].time,price:C.p,label:'3'},
+          {i:A.i,time:cs[A.i].time,price:A.p,label:'P1'},
+          {i:B.i,time:cs[B.i].time,price:B.p,label:'P2'},
+          {i:C.i,time:cs[C.i].time,price:C.p,label:'P3'},
           {i:n-1,time:cs[n-1].time,price:liveP,label:'؟ (الآن)'}
         ];
         const targetExt=+(C.p+1.618*legAB).toFixed(2);
@@ -1398,7 +1415,7 @@ function detectElliott(cs){
         return{
           sig:bullish?'شراء':'بيع',wave:bullish?1:-1,
           desc:`${bullish?'ارتداد صاعد':'ارتداد هابط'} بعد تصحيح ${(retr*100).toFixed(0)}%`,
-          why:`تصحيح ${(retr*100).toFixed(0)}% لموجة سابقة ثم استئناف الاتجاه ${bullish?'صعوداً':'هبوطاً'} — ${stage} (${freshness}% من طول الموجة المتوقعة قُطع فعلياً)`,
+          why:`تصحيح ${(retr*100).toFixed(0)}% لآخر موجتين ثم استئناف الاتجاه ${bullish?'صعوداً':'هبوطاً'} — ${stage} (${freshness}% من طول الموجة المتوقعة قُطع فعلياً) — ملاحظة: هذا آخر تصحيح فيبوناتشي متسق، مو عدّ إليوت كامل موثّق من الأصل`,
           points,bullBias:bullish,fresh:freshness<50,
           target:{price:targetExt,label:'هدف امتداد 1.618×',basis:'ext1618'},
           target2:{price:targetEq,label:'هدف تعادل 1.0×',basis:'equality'}
@@ -1420,11 +1437,51 @@ function detectElliott(cs){
   else if(r7>0&&r14<0){wave=1;sig='شراء';desc='الموجة ① بداية صعود';why=`انعكاس أسبوعي +${r7}% بعد هبوط ← بداية موجة صاعدة جديدة`;}
   else{why='لا موجة واضحة';}
 
+  /* Only ever label points 0-1-2-3-4-5 as a genuine impulse if it actually
+     satisfies the core Elliott rules — previously ANY 6 zigzag pivots got
+     labeled this way with zero validation, which could (and did) draw a
+     rule-violating, simply wrong wave count on the chart. */
+  function impulseValid(p0,p1,p2,p3,p4,p5){
+    const up=p1.p>p0.p; /* overall direction of wave 1 */
+    const w1=Math.abs(p1.p-p0.p),w3=Math.abs(p3.p-p2.p),w5=Math.abs(p5.p-p4.p);
+    if(up){
+      if(p2.p<=p0.p)return false;      /* rule: wave 2 must not retrace 100%+ of wave 1 */
+      if(p4.p<=p1.p)return false;      /* rule: wave 4 must not overlap wave 1's price territory */
+    }else{
+      if(p2.p>=p0.p)return false;
+      if(p4.p>=p1.p)return false;
+    }
+    if(w3<=w1&&w3<=w5)return false;    /* rule: wave 3 must never be the shortest of 1/3/5 */
+    return true;
+  }
+  function partialImpulseValid(p0,p1,p2,p3,p4){
+    const up=p1.p>p0.p;
+    if(up){ if(p2.p<=p0.p)return false; if(p4.p<=p1.p)return false; }
+    else{ if(p2.p>=p0.p)return false; if(p4.p>=p1.p)return false; }
+    const w1=Math.abs(p1.p-p0.p),w3=Math.abs(p3.p-p2.p);
+    if(w3<=w1*0.4)return false; /* wave 3 shouldn't be a tiny fraction of wave 1 this early */
+    return true;
+  }
   const tail=zz.slice(-6);
   let points=[];
-  if(tail.length>=6)points=tail.slice(-6).map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4','5'][idx]}));
-  else if(tail.length===5)points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4'][idx]}));
-  else if(tail.length===4)points=tail.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','A','B','C'][idx]}));
+  if(tail.length>=6){
+    const[p0,p1,p2,p3,p4,p5]=tail.slice(-6);
+    if(impulseValid(p0,p1,p2,p3,p4,p5)){
+      points=[p0,p1,p2,p3,p4,p5].map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4','5'][idx]}));
+    }
+  }
+  if(!points.length&&tail.length>=5){
+    const last5=tail.slice(-5);
+    if(partialImpulseValid(...last5)){
+      points=last5.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','1','2','3','4'][idx]}));
+    }
+  }
+  if(!points.length&&tail.length>=4){
+    /* Couldn't validate an impulse either way — fall back to just the last
+       confirmed corrective leg (0-A-B-C) instead of a fabricated count */
+    const last4=tail.slice(-4);
+    points=last4.map((pv,idx)=>({i:pv.i,time:cs[pv.i].time,price:pv.p,label:['0','A','B','C'][idx]}));
+  }
 
   const byLbl=l=>points.find(p=>p.label===l);
   const p0=byLbl('0'),p1=byLbl('1'),p2=byLbl('2'),p4=byLbl('4'),pA=byLbl('A'),pB=byLbl('B');
@@ -1433,6 +1490,137 @@ function detectElliott(cs){
   else if(p2&&p0&&p1){const w1=p1.price-p0.price;target={price:+(p2.price+1.618*w1).toFixed(2),label:'هدف الموجة ③ (امتداد 1.618×)',basis:'ext1618'};}
   else if(pB&&p0&&pA){const wA=pA.price-p0.price;target={price:+(pB.price+wA).toFixed(2),label:'هدف الموجة C (تعادل مع الموجة A)',basis:'equality'};}
   return{sig,wave,desc,why,points,bullBias:wave>0,target,fresh:false};
+}
+
+/* ══════════════════════════════════════════════════════════════
+   🐺 موجة الذئب (WOLFE WAVE) — a distinct 5-point reversal pattern:
+   points 1-3-5 sit on one (roughly straight) trendline, points 2-4 sit
+   on the other, the two lines form a converging channel, and point 5
+   must PIERCE beyond the 1-3 trendline extended — that pierce is the
+   actual trigger. The trade target is where a line drawn through points
+   1 and 4 (extended forward) sits — the "EPA" (Estimated Price at
+   Arrival) line. This is a completely different pattern from
+   Elliott/Harmonic and was not previously in the platform at all.
+   ══════════════════════════════════════════════════════════════ */
+function detectWolfe(cs){
+  const zz=calcZigZag(cs,3);
+  if(zz.length<5)return null;
+  const pts5=zz.slice(-5);
+  for(let i=1;i<5;i++){if(pts5[i].type===pts5[i-1].type)return null;} /* must strictly alternate H/L */
+  const[p1,p2,p3,p4,p5]=pts5;
+
+  let bullish;
+  if(p1.type==='L'&&p2.type==='H'&&p3.type==='L'&&p4.type==='H'&&p5.type==='L')bullish=true;
+  else if(p1.type==='H'&&p2.type==='L'&&p3.type==='H'&&p4.type==='L'&&p5.type==='H')bullish=false;
+  else return null;
+
+  /* Converging channel rules: point 3 must be a "higher low"/"lower high"
+     than point 1, and point 4 must be a "lower high"/"higher low" than
+     point 2 — this is what makes it a genuine narrowing wedge shape
+     instead of just any random 5 alternating swings. */
+  if(bullish){ if(!(p3.p>p1.p)||!(p4.p<p2.p))return null; }
+  else{ if(!(p3.p<p1.p)||!(p4.p>p2.p))return null; }
+
+  /* The core Wolfe trigger: point 5 must PIERCE beyond the 1-3 trendline
+     extended to point 5's time. Without this, it's just a wedge, not a
+     Wolfe Wave — this is the rule naive "5-point" detectors often skip,
+     which is exactly the kind of thing that draws a wrong pattern. */
+  const slope13=(p3.p-p1.p)/(p3.i-p1.i);
+  const line13AtP5=p1.p+slope13*(p5.i-p1.i);
+  if(bullish){ if(!(p5.p<line13AtP5))return null; }
+  else{ if(!(p5.p>line13AtP5))return null; }
+
+  /* Target = the 1-4 line ("EPA"), projected forward past point 5 by
+     roughly the same number of bars as the 4→5 leg took. */
+  const slope14=(p4.p-p1.p)/(p4.i-p1.i);
+  const extraBars=Math.max(1,p5.i-p4.i);
+  const lastIdx=cs.length-1;
+  const targetIdx=Math.min(p5.i+extraBars,lastIdx+extraBars);
+  const targetPrice=p1.p+slope14*(targetIdx-p1.i);
+  const line13AtLast=p1.p+slope13*(lastIdx-p1.i);
+
+  const points=[
+    {i:p1.i,time:cs[p1.i].time,price:p1.p,label:'1'},
+    {i:p2.i,time:cs[p2.i].time,price:p2.p,label:'2'},
+    {i:p3.i,time:cs[p3.i].time,price:p3.p,label:'3'},
+    {i:p4.i,time:cs[p4.i].time,price:p4.p,label:'4'},
+    {i:p5.i,time:cs[p5.i].time,price:p5.p,label:'5'},
+  ];
+  const auxLines=[
+    {from:{time:cs[p1.i].time,price:p1.p},to:{time:cs[lastIdx].time,price:line13AtLast},color:'#a78bfa',style:1},
+    {from:{time:cs[p2.i].time,price:p2.p},to:{time:cs[p4.i].time,price:p4.p},color:'#fb923c',style:1},
+  ];
+
+  return{
+    valid:true,bullish,sig:bullish?'شراء':'بيع',points,auxLines,
+    target:{price:+targetPrice.toFixed(2),label:'هدف خط 1-4 الممتد (EPA)'},
+    why:`نموذج موجة الذئب ${bullish?'الصعودي':'الهبوطي'} — النقطة 5 اخترقت خط 1-3 ${bullish?'من الأسفل':'من الأعلى'} وهذا مثّل إشارة الدخول — الهدف عند امتداد خط 1-4 (EPA)`
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   📐 القناة السعرية التلقائية (AUTO TREND CHANNEL) — connects the
+   last TWO confirmed swing highs into a resistance trendline, and the
+   last TWO confirmed swing lows into a support trendline, both
+   extended forward past the last candle — exactly how a trader would
+   draw them by hand, just done automatically. Classifies the shape
+   (parallel channel / rising / falling / converging wedge / broadening)
+   from the two slopes, and gives a breakout target from the channel's
+   width. ══════════════════════════════════════════════════════════ */
+function detectTrendChannel(cs){
+  if(!cs||cs.length<20)return null;
+  const zz=calcZigZag(cs,3);
+  const highs=zz.filter(p=>p.type==='H');
+  const lows=zz.filter(p=>p.type==='L');
+  if(highs.length<2||lows.length<2)return null;
+
+  const h2=highs.slice(-2),l2=lows.slice(-2); /* last two swing highs, last two swing lows */
+  const lastIdx=cs.length-1;
+  const projIdx=Math.min(lastIdx+Math.round((lastIdx-Math.min(h2[0].i,l2[0].i))*0.25),lastIdx+40); /* project ~25% further, capped */
+
+  const slopeR=(h2[1].p-h2[0].p)/(h2[1].i-h2[0].i);
+  const resAtLast=h2[0].p+slopeR*(lastIdx-h2[0].i);
+  const resAtProj=h2[0].p+slopeR*(projIdx-h2[0].i);
+
+  const slopeS=(l2[1].p-l2[0].p)/(l2[1].i-l2[0].i);
+  const supAtLast=l2[0].p+slopeS*(lastIdx-l2[0].i);
+  const supAtProj=l2[0].p+slopeS*(projIdx-l2[0].i);
+
+  if(resAtLast<=supAtLast)return null; /* lines have already crossed — not a usable channel anymore */
+
+  const slopeDiff=(slopeR-slopeS)/((Math.abs(slopeR)+Math.abs(slopeS))/2||1);
+  let shape;
+  if(Math.abs(slopeR)<1e-9&&Math.abs(slopeS)<1e-9)shape='أفقية (تجميع)';
+  else if(slopeDiff>0.35)shape='متسعة (Broadening) — تذبذب متزايد';
+  else if(slopeDiff<-0.35)shape='متقاربة (وتد/مثلث)';
+  else if(slopeR>0&&slopeS>0)shape='صاعدة (Ascending Channel)';
+  else if(slopeR<0&&slopeS<0)shape='هابطة (Descending Channel)';
+  else shape='غير منتظمة';
+
+  const cur=cs[lastIdx].close;
+  const width=resAtLast-supAtLast;
+  const nearRes=(resAtLast-cur)/width<0.15;
+  const nearSup=(cur-supAtLast)/width<0.15;
+
+  const points=[
+    {i:h2[0].i,time:cs[h2[0].i].time,price:h2[0].p,label:'قمة 1'},
+    {i:h2[1].i,time:cs[h2[1].i].time,price:h2[1].p,label:'قمة 2'},
+    {i:l2[0].i,time:cs[l2[0].i].time,price:l2[0].p,label:'قاع 1'},
+    {i:l2[1].i,time:cs[l2[1].i].time,price:l2[1].p,label:'قاع 2'},
+  ];
+  const projTime=projIdx<=lastIdx?cs[projIdx].time:cs[lastIdx].time+(projIdx-lastIdx)*((cs[lastIdx].time-cs[lastIdx-1].time)||86400);
+  const auxLines=[
+    {from:{time:cs[h2[0].i].time,price:h2[0].p},to:{time:projTime,price:resAtProj},color:'#f04458',style:0,label:'المقاومة'},
+    {from:{time:cs[l2[0].i].time,price:l2[0].p},to:{time:projTime,price:supAtProj},color:'#0ecf7e',style:0,label:'الدعم'},
+  ];
+
+  return{
+    valid:true,shape,resAtLast:+resAtLast.toFixed(2),supAtLast:+supAtLast.toFixed(2),
+    width:+width.toFixed(2),nearRes,nearSup,points,auxLines,
+    breakoutUpTarget:+(resAtLast+width).toFixed(2),
+    breakoutDownTarget:+(supAtLast-width).toFixed(2),
+    why:`قناة ${shape} — المقاومة الآن عند ${resAtLast.toFixed(2)} والدعم عند ${supAtLast.toFixed(2)} (عرض القناة ${width.toFixed(2)}) — ${nearRes?'السعر قريب من المقاومة':nearSup?'السعر قريب من الدعم':'السعر بمنتصف القناة'}`
+  };
 }
 
 /* ══ LIMIT-UP HUNTER ══ */
@@ -2777,22 +2965,27 @@ document.addEventListener('webkitfullscreenchange',()=>{
 /* ══ PATTERN OVERLAY (Harmonic / Elliott) — draws the actual detected
    structure on the main chart so the user can see its shape, whether or
    not the pattern is fully complete. ══ */
-let _patMode=null,_patLineSeries=null,_patTargetLines=[];
+let _patMode=null,_patLineSeriesArr=[],_patTargetLines=[];
 function refreshPatternButtons(sym){
   ensurePatternData(sym);
-  const harm=G.harmCache?.[sym],ew=G.ewCache?.[sym];
-  const hb=document.getElementById('pat-harm-btn'),eb=document.getElementById('pat-ew-btn');
+  const harm=G.harmCache?.[sym],ew=G.ewCache?.[sym],wolfe=G.wolfeCache?.[sym],chan=G.chanCache?.[sym];
+  const hb=document.getElementById('pat-harm-btn'),eb=document.getElementById('pat-ew-btn'),wb=document.getElementById('pat-wolfe-btn'),cb=document.getElementById('pat-chan-btn');
   if(hb)hb.classList.toggle('disabled',!harm);
   if(eb)eb.classList.toggle('disabled',!ew||!ew.points?.length);
+  if(wb)wb.classList.toggle('disabled',!wolfe);
+  if(cb)cb.classList.toggle('disabled',!chan);
 }
 function ensurePatternData(sym){
   const cs=G.cans[sym];if(!cs||cs.length<10)return;
-  G.harmCache=G.harmCache||{};G.ewCache=G.ewCache||{};
+  G.harmCache=G.harmCache||{};G.ewCache=G.ewCache||{};G.wolfeCache=G.wolfeCache||{};G.chanCache=G.chanCache||{};
   if(!G.harmCache[sym])G.harmCache[sym]=detectHarmonic(cs);
   if(!G.ewCache[sym])G.ewCache[sym]=detectElliott(cs);
+  if(!(sym in G.wolfeCache))G.wolfeCache[sym]=detectWolfe(cs);
+  if(!(sym in G.chanCache))G.chanCache[sym]=detectTrendChannel(cs);
 }
 function clearPatternDrawing(){
-  if(_patLineSeries){try{G.lwChart.removeSeries(_patLineSeries);}catch(e){}_patLineSeries=null;}
+  _patLineSeriesArr.forEach(s=>{try{G.lwChart.removeSeries(s);}catch(e){}});
+  _patLineSeriesArr=[];
   if(_patTargetLines.length){_patTargetLines.forEach(l=>{try{G.cSeries.removePriceLine(l);}catch(e){}});_patTargetLines=[];}
   if(G.cSeries)G.cSeries.setMarkers([]);
 }
@@ -2800,40 +2993,76 @@ function clearPatterns(){
   _patMode=null;
   document.getElementById('pat-harm-btn')?.classList.remove('on');
   document.getElementById('pat-ew-btn')?.classList.remove('on');
+  document.getElementById('pat-wolfe-btn')?.classList.remove('on');
+  document.getElementById('pat-chan-btn')?.classList.remove('on');
   document.getElementById('pat-info')?.classList.remove('show');
   clearPatternDrawing();
 }
+function _patData(mode,sym){
+  if(mode==='harm')return G.harmCache[sym];
+  if(mode==='ew')return G.ewCache[sym];
+  if(mode==='wolfe')return G.wolfeCache[sym];
+  return G.chanCache[sym];
+}
 function togglePattern(mode){
   const sym=G.sel;ensurePatternData(sym);
-  const data=mode==='harm'?G.harmCache[sym]:G.ewCache[sym];
+  const data=_patData(mode,sym);
   if(!data||(mode==='ew'&&!data.points?.length)){
-    alert(mode==='harm'?'لا يوجد نموذج هارمونيك واضح حالياً على هذا السهم/الإطار الزمني':'لا توجد بيانات كافية لرسم موجات إيليوت حالياً');
+    const msgs={harm:'لا يوجد نموذج هارمونيك واضح حالياً على هذا السهم/الإطار الزمني',
+      ew:'لا توجد بيانات كافية لرسم موجات إيليوت حالياً',
+      wolfe:'لا يوجد نموذج موجة الذئب متحقق حالياً (يحتاج 5 قمم/قيعان متتالية بقناة متضائلة وكسر عند النقطة 5)',
+      channel:'ما قدرت أحدد قمتين وقاعين واضحين لرسم قناة — يحتاج بيانات أكثر أو تذبذب أوضح'};
+    alert(msgs[mode]);
     return;
   }
   if(_patMode===mode){clearPatterns();return;}
   _patMode=mode;
   document.getElementById('pat-harm-btn')?.classList.toggle('on',mode==='harm');
   document.getElementById('pat-ew-btn')?.classList.toggle('on',mode==='ew');
+  document.getElementById('pat-wolfe-btn')?.classList.toggle('on',mode==='wolfe');
+  document.getElementById('pat-chan-btn')?.classList.toggle('on',mode==='channel');
   drawPattern(mode);
 }
 function drawPattern(mode,silent){
   const sym=G.sel;ensurePatternData(sym);
-  const data=mode==='harm'?G.harmCache[sym]:G.ewCache[sym];
+  const data=_patData(mode,sym);
   clearPatternDrawing();
   if(!data)return;
   const pts=data.points;
   if(!pts||pts.length<2)return;
-  const col=mode==='harm'?(data.sig==='شراء'?'#0ecf7e':'#f04458'):(data.bullBias?'#4a9eff':'#fb923c');
-  _patLineSeries=G.lwChart.addLineSeries({color:col,lineWidth:3,lineStyle:mode==='harm'&&data.forming?2:0,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
-  _patLineSeries.setData(pts.map(p=>({time:p.time,value:p.price})));
+  const col=mode==='harm'?(data.sig==='شراء'?'#0ecf7e':'#f04458'):mode==='wolfe'?(data.bullish?'#0ecf7e':'#f04458'):mode==='channel'?'#a78bfa':(data.bullBias?'#4a9eff':'#fb923c');
+  if(mode!=='channel'){
+    /* Channel points are two independent pairs (2 highs, 2 lows), not one
+       chronological path — connecting all 4 in array order would draw a
+       meaningless zig-zag across unrelated points, so skip the main path
+       line for channel mode; the two trend lines below ARE the pattern. */
+    const mainLine=G.lwChart.addLineSeries({color:col,lineWidth:3,lineStyle:mode==='harm'&&data.forming?2:0,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+    mainLine.setData(pts.map(p=>({time:p.time,value:p.price})));
+    _patLineSeriesArr.push(mainLine);
+  }
+  /* Wolfe Wave / Channel both need extra trend lines drawn separately —
+     for Wolfe that's the 1-3 and 2-4 channel lines, for the auto-channel
+     that's the resistance + support lines themselves (the whole point). */
+  if((mode==='wolfe'||mode==='channel')&&data.auxLines){
+    for(const al of data.auxLines){
+      try{
+        const s=G.lwChart.addLineSeries({color:al.color,lineWidth:mode==='channel'?2.5:2,lineStyle:al.style??1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+        s.setData([{time:al.from.time,value:al.from.price},{time:al.to.time,value:al.to.price}]);
+        _patLineSeriesArr.push(s);
+      }catch(e){}
+    }
+  }
   /* Label position follows the actual zig-zag shape: a local peak gets its
      label above the candle, a local trough gets it below — instead of a
-     blind alternation that can land the text on top of the wick. */
-  const mk=pts.map((p,i)=>{
-    const prev=pts[i-1],next=pts[i+1];
-    const isPeak=(!prev||p.price>=prev.price)&&(!next||p.price>=next.price);
-    return{time:p.time,position:isPeak?'aboveBar':'belowBar',color:col,shape:'circle',text:p.label,size:2};
-  });
+     blind alternation that can land the text on top of the wick. Channel
+     points aren't a sequential path, so position them by type instead. */
+  const mk=mode==='channel'
+    ? pts.map(p=>({time:p.time,position:p.label.includes('قمة')?'aboveBar':'belowBar',color:p.label.includes('قمة')?'#f04458':'#0ecf7e',shape:'circle',text:p.label,size:1}))
+    : pts.map((p,i)=>{
+        const prev=pts[i-1],next=pts[i+1];
+        const isPeak=(!prev||p.price>=prev.price)&&(!next||p.price>=next.price);
+        return{time:p.time,position:isPeak?'aboveBar':'belowBar',color:col,shape:'circle',text:p.label,size:2};
+      });
   if(G.cSeries)G.cSeries.setMarkers(mk);
   /* Draw the projected target(s) as horizontal price lines so the user
      can see exactly where the pattern/wave expects price to go next. */
@@ -2847,6 +3076,13 @@ function drawPattern(mode,silent){
   }else if(mode==='ew'){
     if(data.target)aP(data.target.price,data.target.label,col,2);
     if(data.target2)aP(data.target2.price,data.target2.label,col,1);
+  }else if(mode==='wolfe'&&data.target){
+    aP(data.target.price,data.target.label,col,2);
+  }else if(mode==='channel'){
+    aP(data.resAtLast,'مقاومة القناة','#f04458',0);
+    aP(data.supAtLast,'دعم القناة','#0ecf7e',0);
+    aP(data.breakoutUpTarget,'هدف كسر صاعد',col,2);
+    aP(data.breakoutDownTarget,'هدف كسر هابط',col,2);
   }
   const info=document.getElementById('pat-info');
   if(info){
@@ -2857,7 +3093,12 @@ function drawPattern(mode,silent){
         :`<br><b>🎯 الأهداف:</b> هدف1=${t.t1} · هدف2=${t.t2} · هدف3(A)=${t.t3} — <b>وقف الخسارة:</b> ${t.sl}`):'';
       const stateTxt=data.live?'<b style="color:#f5c842">⏳ لسا ما وصل الهدف — راقب منطقة الـ PRZ</b>':data.forming?'(قيد التكوّن)':'(مكتمل — تاريخي)';
       info.innerHTML=`<b>🦋 نموذج ${data.name}</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'} ${stateTxt} — اكتمال ${data.completion}%<br>${data.why}${tgTxt}`;
-    }else{
+    }else if(mode==='wolfe'){
+      const tgTxt=data.target?`<br><b>🎯 ${data.target.label}:</b> ${data.target.price}`:'';
+      info.innerHTML=`<b>🐺 موجة الذئب</b> — ${data.sig==='شراء'?'صعودي':'هبوطي'}<br>${data.why}${tgTxt}<br><span style="color:var(--t3)">الخط البنفسجي = خط 1-3 · الخط البرتقالي = خط 2-4</span>`;
+    }else if(mode==='channel'){
+      info.innerHTML=`<b>📐 قناة ${data.shape}</b><br>${data.why}<br><b>🎯 هدف كسر صاعد:</b> ${data.breakoutUpTarget} · <b>هدف كسر هابط:</b> ${data.breakoutDownTarget}<br><span style="color:var(--t3)">الخط الأحمر = مقاومة (تصل قمتين) · الخط الأخضر = دعم (يصل قاعين) — ممدودان تلقائياً للأمام</span>`;
+    }else if(mode==='ew'){
       const freshTxt=data.fresh?'<span style="color:#0ecf7e"><b>🟢 بداية طازجة — فرصة دخول مبكرة</b></span><br>':(data.fresh===false&&data.target?'<span style="color:#f5c842">⚠️ الموجة متقدمة، ليست بداية جديدة</span><br>':'');
       const tgTxt=data.target?`<b>🎯 ${data.target.label}:</b> ${data.target.price}${data.target2?` · <b>${data.target2.label}:</b> ${data.target2.price}`:''}`:'<span style="color:var(--t3)">لا يوجد هدف واضح في هذه المرحلة</span>';
       info.innerHTML=`<b>🌊 إيليوت</b> — ${data.desc||'—'} ${data.wave!==0?`(${data.sig})`:''}<br>${freshTxt}${data.why}<br>${tgTxt}`;
@@ -2883,8 +3124,31 @@ function selectStock(sym){
 
 function setTF(range,interval,el){
   G.tf=range;G.tfi=interval;document.querySelectorAll('.tf').forEach(b=>b.classList.remove('on'));el.classList.add('on');
+  document.querySelectorAll('.tf-interval').forEach(b=>b.classList.toggle('on',b.dataset.itv===interval));
   const sym=G.sel;delete G.cans[sym];G.ld.delete(sym);G.ldg.delete(sym);
-  if(G.harmCache)delete G.harmCache[sym];if(G.ewCache)delete G.ewCache[sym];
+  if(G.harmCache)delete G.harmCache[sym];if(G.ewCache)delete G.ewCache[sym];if(G.wolfeCache)delete G.wolfeCache[sym];if(G.chanCache)delete G.chanCache[sym];
+  loadStock(sym,range,interval).then(()=>{calcInd(sym);updateHeader(sym);updateChart(sym);updateTradePlan(sym);});
+}
+function setChartInterval(interval,el){
+  /* Quick daily/hourly toggle — keeps the current range if it still makes
+     sense for the new interval, otherwise falls back to a range Yahoo
+     reliably supports for that interval (hourly data has a much shorter
+     usable lookback than daily). */
+  let range=G.tf;
+  if(interval==='1h'){
+    if(!['1d','5d','1mo'].includes(range))range='1mo';
+  }else{
+    if(['1d','5d'].includes(range))range='3mo';
+  }
+  document.querySelectorAll('.tf-interval').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  document.querySelectorAll('.tfs .tf').forEach(b=>{
+    const onclick=b.getAttribute('onclick')||'';
+    b.classList.toggle('on',onclick.includes(`'${range}','${interval}'`));
+  });
+  G.tf=range;G.tfi=interval;
+  const sym=G.sel;delete G.cans[sym];G.ld.delete(sym);G.ldg.delete(sym);
+  if(G.harmCache)delete G.harmCache[sym];if(G.ewCache)delete G.ewCache[sym];if(G.wolfeCache)delete G.wolfeCache[sym];if(G.chanCache)delete G.chanCache[sym];
   loadStock(sym,range,interval).then(()=>{calcInd(sym);updateHeader(sym);updateChart(sym);updateTradePlan(sym);});
 }
 
