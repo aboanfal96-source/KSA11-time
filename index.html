@@ -323,7 +323,8 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
       <div class="ftab" onclick="setFilter('hunter',this)"><span class="ficon">🎪</span> صيد النسبة</div>
       <div class="ftab" onclick="setFilter('time',this)"><span class="ficon">⏱</span> توافق زمني <span class="fbadge" id="fb-time" style="background:rgba(255,215,0,.12);color:#FFD700;border-color:rgba(255,215,0,.25)">0</span></div>
       <div class="ftab" onclick="setFilter('sniper',this)"><span class="ficon">🎯</span> قناص ما قبل الانطلاق <span class="fbadge" id="fb-sniper" style="background:rgba(167,139,250,.12);color:var(--pu);border-color:rgba(167,139,250,.25)">0</span></div>
-      <div class="ftab" onclick="setFilter('fib618',this)"><span class="ficon">📐</span> ارتداد فيبوناتشي ٦١.٨٪ <span class="fbadge" id="fb-fib618" style="background:rgba(14,207,126,.12);color:var(--up);border-color:rgba(14,207,126,.25)">0</span></div>
+      <div class="ftab" onclick="setFilter('fib618',this)"><span class="ficon">📐</span> ارتداد فيبوناتشي ٦١.٨٪/١٦١.٨٪ <span class="fbadge" id="fb-fib618" style="background:rgba(14,207,126,.12);color:var(--up);border-color:rgba(14,207,126,.25)">0</span></div>
+      <div class="ftab" onclick="setFilter('falsebreak',this)"><span class="ficon">🪤</span> الكسر الوهمي <span class="fbadge" id="fb-falsebreak" style="background:rgba(240,68,88,.12);color:var(--dn);border-color:rgba(240,68,88,.25)">0</span></div>
       <div class="ftab" onclick="setFilter('master',this)" style="order:-1"><span class="ficon">🏆</span> الأقوى (مرتبة موحّدة) <span class="fbadge" id="fb-master" style="background:rgba(255,180,0,.15);color:#ffb400;border-color:rgba(255,180,0,.3)">0</span></div>
       <div class="ftab" onclick="setFilter('whale',this)" style="order:-1;background:rgba(45,212,191,.08);border-color:rgba(45,212,191,.3)"><span class="ficon">🐋</span> قاع الحيتان <span class="fbadge" id="fb-whale" style="background:rgba(45,212,191,.15);color:#2dd4bf;border-color:rgba(45,212,191,.3)">0</span></div>
       <div class="ftab" onclick="setFilter('macd',this)"><span class="ficon">📊</span> تقاطع ماكد <span class="fbadge" id="fb-macd" style="background:rgba(96,165,250,.12);color:#60a5fa;border-color:rgba(96,165,250,.25)">0</span></div>
@@ -1039,7 +1040,7 @@ const Tm=()=>{const d=new Date();return`${String(d.getHours()).padStart(2,'0')}:
 const G={sel:'2222',tf:'3mo',tfi:'1d',pr:{},op:{},hi:{},lo:{},vo:{},ch:{},pc:{},cans:{},ind:{},sc:{},ld:new Set(),ldg:new Set(),lwChart:null,cSeries:null,vSeries:null,series:{}};
 let _filter='all',_buyOnly=false,_sellOnly=false,_alertOnly=false,_sortCol='master',_sortDir=-1,_showBearish=false;
 let _visibleSyms=[],_focusedIdx=-1,_pinnedSym=null;
-const TAB_ORDER=['all','vz','ma','rs','sq','ab','fg','hidden','pregap','fvgr','elliott','harmonic','hunter','time','sniper','whale','fib618','master','macd','instvol','revcandle'];
+const TAB_ORDER=['all','vz','ma','rs','sq','ab','fg','hidden','pregap','fvgr','elliott','harmonic','hunter','time','sniper','whale','fib618','falsebreak','master','macd','instvol','revcandle'];
 let _advData=[],_aiOpen=false,_zoomLevel=100;
 let _whyOpen={};
 
@@ -1984,7 +1985,8 @@ function timeAlignmentTrigger(cs,ind){
    that was exactly the gap that let declining stocks leak into results.
    ══════════════════════════════════════════════════════════════ */
 const FIB_618=0.618;
-const FIB_TOLERANCE_PCT=3.5;/* medium tolerance around the 61.8% level, as % of the swing range */
+const FIB_1618=1.618;
+const FIB_TOLERANCE_PCT=3.5;/* medium tolerance around the fib level, as % of the swing range */
 
 function calcFib618Bounce(cs){
   if(!cs||cs.length<20)return{active:false,inZone:false,confirmed:false,score:0,why:'بيانات غير كافية'};
@@ -1992,9 +1994,9 @@ function calcFib618Bounce(cs){
   const zz=calcZigZag(cs,3);
   if(zz.length<2)return{active:false,inZone:false,confirmed:false,score:0,why:'لا يوجد تأرجح سعري واضح'};
 
-  /* Find the most recent confirmed UP-LEG (Low → High) to measure the 61.8%
-     retracement from. Two cases, depending on whether the pullback itself
-     has already formed its own confirmed swing-low pivot:
+  /* Find the most recent confirmed UP-LEG (Low → High) to measure both
+     Fibonacci zones from. Two cases, depending on whether the pullback
+     itself has already formed its own confirmed swing-low pivot:
        Case 1: zz ends [...,L,H] — up-leg confirmed, pullback is still
                forming in the unconfirmed tail (current close IS the pullback).
        Case 2: zz ends [...,L,H,L] — the pullback already confirmed its own
@@ -2012,47 +2014,113 @@ function calcFib618Bounce(cs){
   const legRange=legHigh-legLow;
   if(legRange<=0)return{active:false,inZone:false,confirmed:false,score:0,why:'مدى تأرجح غير صالح'};
 
-  const fibLevel=legHigh-legRange*FIB_618;
   const cur=cs[n-1].close,prevClose=cs[n-2]?cs[n-2].close:cur;
-  const tolPrice=legRange*(FIB_TOLERANCE_PCT/100);
-  const distPct=Math.abs(cur-fibLevel)/fibLevel*100;
-  const inZone=Math.abs(cur-fibLevel)<=tolPrice;
-
-  /* Bounce confirmation: closing UP today, today's low didn't break
-     meaningfully below the fib level (held as support), and the candle
-     shows real buying (close in upper half of day's range). This
-     combination is what separates an actual bounce from a stock merely
-     passing through 61.8% on its way further down. */
   const lastC=cs[n-1];
   const dayRange=lastC.high-lastC.low||.001;
   const closePosition=(lastC.close-lastC.low)/dayRange;
   const closedUp=cur>prevClose;
-  const heldLevel=lastC.low>=fibLevel*(1-FIB_TOLERANCE_PCT/100*0.6);
   const strongClose=closePosition>=0.55;
-  const confirmed=inZone&&closedUp&&heldLevel&&strongClose;
 
-  let score=0;
-  if(confirmed){
-    score=55;
-    if(closePosition>=0.75)score+=15;
-    const vol5=cs.slice(-5).map(c=>c.volume),vol5Mean=vol5.reduce((a,b)=>a+b,0)/5||1;
-    if(lastC.volume>vol5Mean*1.3)score+=15;
-    if(distPct<=1.5)score+=15;
-    score=Math.min(100,score);
-  }else if(inZone){
-    score=20;
+  /* Shared check logic for a given Fibonacci level, reused for both the
+     61.8% retracement (inside the leg) and the 161.8% extension (a deeper
+     capitulation zone BELOW the original swing low). */
+  function checkLevel(fibLevel,label){
+    const tolPrice=legRange*(FIB_TOLERANCE_PCT/100);
+    const distPct=Math.abs(cur-fibLevel)/fibLevel*100;
+    const inZone=Math.abs(cur-fibLevel)<=tolPrice;
+    const heldLevel=lastC.low>=fibLevel*(1-FIB_TOLERANCE_PCT/100*0.6);
+    const confirmed=inZone&&closedUp&&heldLevel&&strongClose;
+    let score=0;
+    if(confirmed){
+      score=55;
+      if(closePosition>=0.75)score+=15;
+      const vol5=cs.slice(-5).map(c=>c.volume),vol5Mean=vol5.reduce((a,b)=>a+b,0)/5||1;
+      if(lastC.volume>vol5Mean*1.3)score+=15;
+      if(distPct<=1.5)score+=15;
+      score=Math.min(100,score);
+    }else if(inZone){score=20;}
+    return{label,fibLevel,inZone,confirmed,distPct,score};
   }
 
-  const why=confirmed
-    ?`ارتد من مستوى ٦١.٨٪ (${fibLevel.toFixed(2)}) بشمعة صعودية إغلاق ${(closePosition*100).toFixed(0)}% من مدى اليوم ← ارتداد مؤكد`
-    :inZone
-      ?`السعر داخل منطقة ٦١.٨٪ (${fibLevel.toFixed(2)}) لكن بدون تأكيد ارتداد بعد${closedUp?'':' — مايزال يغلق سلبي، قد يكسر المستوى نزولاً'}`
-      :`بعيد عن مستوى ٦١.٨٪ (${fibLevel.toFixed(2)}) بمسافة ${distPct.toFixed(1)}%`;
+  const fibLevel618=legHigh-legRange*FIB_618;
+  const fibLevel1618=legHigh-legRange*FIB_1618; /* = legLow - legRange*0.618, an extension BELOW the original low */
+  const r618=checkLevel(fibLevel618,'٦١.٨٪');
+  const r1618=checkLevel(fibLevel1618,'١٦١.٨٪ (تمديد)');
 
-  return{active:confirmed,inZone,confirmed,fibLevel:+fibLevel.toFixed(2),legHigh:+legHigh.toFixed(2),legLow:+legLow.toFixed(2),
-    distPct:+distPct.toFixed(1),closePosition:+(closePosition*100).toFixed(0),score:Math.round(score),
-    sig:confirmed?'▲ ارتداد ٦١.٨٪':inZone?'⏳ في المنطقة':'—',
-    color:confirmed?'s4':inZone?'s3':'na',why};
+  /* Prefer whichever level is actually confirmed; if both or neither,
+     prefer the one the price is currently closer to / inside. */
+  const best=(r618.confirmed&&!r1618.confirmed)?r618
+    :(r1618.confirmed&&!r618.confirmed)?r1618
+    :(r618.inZone&&!r1618.inZone)?r618
+    :(r1618.inZone&&!r618.inZone)?r1618
+    :(r618.distPct<=r1618.distPct?r618:r1618);
+
+  const why=best.confirmed
+    ?`ارتد من مستوى ${best.label} (${best.fibLevel.toFixed(2)}) بشمعة صعودية إغلاق ${(closePosition*100).toFixed(0)}% من مدى اليوم ← ارتداد مؤكد`
+    :best.inZone
+      ?`السعر داخل منطقة ${best.label} (${best.fibLevel.toFixed(2)}) لكن بدون تأكيد ارتداد بعد${closedUp?'':' — مايزال يغلق سلبي، قد يكسر المستوى نزولاً'}`
+      :`بعيد عن أقرب مستوى فيبوناتشي (${best.label}: ${best.fibLevel.toFixed(2)}) بمسافة ${best.distPct.toFixed(1)}%`;
+
+  return{active:best.confirmed,inZone:best.inZone,confirmed:best.confirmed,level:best.label,
+    fibLevel:+best.fibLevel.toFixed(2),legHigh:+legHigh.toFixed(2),legLow:+legLow.toFixed(2),
+    distPct:+best.distPct.toFixed(1),closePosition:+(closePosition*100).toFixed(0),score:Math.round(best.score),
+    sig:best.confirmed?`▲ ارتداد ${best.label}`:best.inZone?'⏳ في المنطقة':'—',
+    color:best.confirmed?'s4':best.inZone?'s3':'na',why,
+    r618,r1618};
+}
+
+/* ══════════════════════════════════════════════════════════════
+   🪤 الكسر الوهمي (FALSE BREAKOUT / BULL-BEAR TRAP) — detects when
+   price recently pierced a clear resistance or support level but then
+   snapped back to the wrong side of it within a few candles. This is
+   a fundamentally different setup from the Fibonacci bounce above: it
+   isn't about a measured retracement zone, it's about a broken level
+   that DIDN'T hold, trapping the breakout traders who chased it.
+   ══════════════════════════════════════════════════════════════ */
+function calcFalseBreakout(cs){
+  if(!cs||cs.length<30)return{active:false,type:null,score:0,why:'بيانات غير كافية'};
+  const n=cs.length;
+  const lookback=Math.min(40,n-5);
+  const priorSeg=cs.slice(Math.max(0,n-lookback-3),n-3); /* the level, measured BEFORE the last 3 candles */
+  if(priorSeg.length<10)return{active:false,type:null,score:0,why:'بيانات غير كافية'};
+  const priorHigh=Math.max(...priorSeg.map(c=>c.high));
+  const priorLow=Math.min(...priorSeg.map(c=>c.low));
+  const recent=cs.slice(n-3);
+  const cur=cs[n-1];
+  const vol5=cs.slice(-6,-1).map(c=>c.volume),vol5Mean=vol5.reduce((a,b)=>a+b,0)/(vol5.length||1)||1;
+
+  const pierceUpCandle=recent.find(c=>c.high>priorHigh);
+  const bullTrap=!!pierceUpCandle&&cur.close<priorHigh; /* faked a breakout above resistance, then fell back below it */
+
+  const pierceDownCandle=recent.find(c=>c.low<priorLow);
+  const bearTrap=!!pierceDownCandle&&cur.close>priorLow; /* faked a breakdown below support, then recovered above it */
+
+  let type=null,score=0,why='لا يوجد كسر وهمي واضح حالياً';
+  if(bullTrap&&!bearTrap){
+    type='bull_trap';
+    const pierceDepth=(pierceUpCandle.high-priorHigh)/priorHigh*100;
+    score=55;
+    if(cur.close<priorHigh*0.995)score+=15;
+    if(cur.volume>vol5Mean*1.2)score+=15;
+    if(pierceDepth<1.5)score+=15;
+    score=Math.min(100,score);
+    why=`اخترق مقاومة ${priorHigh.toFixed(2)} ثم ارتد وأغلق تحتها ← كسر وهمي صاعد (فخ شرائي) — احتمال انعكاس هبوطي`;
+  }else if(bearTrap&&!bullTrap){
+    type='bear_trap';
+    const pierceDepth=(priorLow-pierceDownCandle.low)/priorLow*100;
+    score=55;
+    if(cur.close>priorLow*1.005)score+=15;
+    if(cur.volume>vol5Mean*1.2)score+=15;
+    if(pierceDepth<1.5)score+=15;
+    score=Math.min(100,score);
+    why=`كسر دعم ${priorLow.toFixed(2)} ثم ارتد وأغلق فوقه ← كسر وهمي هابط (فخ بيعي) — احتمال انعكاس صعودي`;
+  }
+
+  return{active:!!type,type,score:Math.round(score),
+    priorHigh:+priorHigh.toFixed(2),priorLow:+priorLow.toFixed(2),
+    sig:type==='bull_trap'?'▼ كسر وهمي صاعد':type==='bear_trap'?'▲ كسر وهمي هابط':'—',
+    bullish:type==='bear_trap',bearish:type==='bull_trap',
+    color:type==='bull_trap'?'s1':type==='bear_trap'?'s4':'na',why};
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -2356,6 +2424,7 @@ function calcAllFilters(sym,marketROC){
   const harm=detectHarmonic(cs);
   const hunter=calcLimitUpHunter(cs,sym);
   const fib618=calcFib618Bounce(cs);
+  const falseBreak=calcFalseBreakout(cs);
   const macdX=calcMACDCross(G.ind[sym]);
   const instVol=calcInstitutionalVolume(cs);
   const revCandle=calcReversalCandle(cs);
@@ -2394,6 +2463,7 @@ function calcAllFilters(sym,marketROC){
   if(instVol.active){instVol.bullish?bullAlerts++:bearAlerts++;}
   if(revCandle.active){revCandle.bullish?bullAlerts++:bearAlerts++;}
   if(sb.alert)bullAlerts++;/* 🐋 whale accumulation near a genuine low — bullish only by definition */
+  if(falseBreak.active){falseBreak.bullish?bullAlerts++:bearAlerts++;}
 
   let sig='—',cls='sig-watch';
   if(bullAlerts>=6){sig='▲ شراء قوي جداً';cls='sig-buy';}
@@ -2435,6 +2505,7 @@ function calcAllFilters(sym,marketROC){
   masterScore+=instVol.active?(instVol.bullish?7:-7):0;
   masterScore+=revCandle.active?(revCandle.bullish?6:-6):0;
   masterScore+=sb.alert?13:0;
+  masterScore+=falseBreak.active?(falseBreak.bullish?12:-12):0;
   masterScore+=tat.sniperBonus?(tat.dirUp?14:-14):0;
   masterScore+=snp.level==='high'?(snp.dirUp?16:-16):0;
   masterScore+=fib618.confirmed?15:0;
@@ -2445,7 +2516,7 @@ function calcAllFilters(sym,marketROC){
   if(heavyConfirmCount>=3)masterScore+=10;
   masterScore=Math.max(0,Math.min(100,Math.round(masterScore)));
 
-  return{sym,vz,ma,rs,sq,ab,fg,hidden,pregap,fvgr,ew,harm,hunter,tat,snp,sb,fib618,macdX,instVol,revCandle,sig,cls,score,masterScore,bullAlerts,bearAlerts};
+  return{sym,vz,ma,rs,sq,ab,fg,hidden,pregap,fvgr,ew,harm,hunter,tat,snp,sb,fib618,falseBreak,macdX,instVol,revCandle,sig,cls,score,masterScore,bullAlerts,bearAlerts};
 }
 
 /* ══ SCAN ENGINE ══ */
@@ -2496,6 +2567,8 @@ function updateBadges(){
   const fbSniper=document.getElementById('fb-sniper');if(fbSniper)fbSniper.textContent=sniperActive;
   const fib618Active=_advData.filter(d=>d.fib618?.confirmed).length;
   const fbFib618=document.getElementById('fb-fib618');if(fbFib618)fbFib618.textContent=fib618Active;
+  const falseBreakActive=_advData.filter(d=>d.falseBreak?.active).length;
+  const fbFalsebreak=document.getElementById('fb-falsebreak');if(fbFalsebreak)fbFalsebreak.textContent=falseBreakActive;
   const whaleActive=_advData.filter(d=>d.sb?.alert).length;
   const fbWhale=document.getElementById('fb-whale');if(fbWhale)fbWhale.textContent=whaleActive;
 }
@@ -2615,7 +2688,8 @@ function getHeaders(){
     hunter:`${base}<th>درجة</th><th>إنذارات</th><th>الحالة</th>${end}`,
     time:`${base}<th onclick="sortResults('time_d')">المسافة الزمنية</th><th>الدورة المطابقة</th><th>الحالة</th>${end}`,
     sniper:`${base}<th onclick="sortResults('snp')">Sniper Score</th><th>المتوافقة</th><th>الحالة</th>${end}`,
-    fib618:`${base}<th onclick="sortResults('fib_s')">مستوى ٦١.٨٪</th><th>المسافة</th><th>الحالة</th>${end}`,
+    fib618:`${base}<th onclick="sortResults('fib_s')">مستوى فيبوناتشي</th><th>المسافة</th><th>الحالة</th>${end}`,
+    falsebreak:`${base}<th onclick="sortResults('fb_s')">المستوى المكسور</th><th>النوع</th><th>الحالة</th>${end}`,
     master:`${base}<th onclick="sortResults('master')">النتيجة الموحّدة 🏆</th><th>عدد الإشارات</th><th>الحالة</th>${end}`,
     macd:`${base}<th>الهيستوجرام</th><th>يتقوى؟</th><th>الحالة</th>${end}`,
     instvol:`${base}<th onclick="sortResults('iv_r')">مضاعف الحجم</th><th>موضع الإغلاق</th><th>الحالة</th>${end}`,
@@ -2652,6 +2726,7 @@ function renderResults(){
       if(_filter==='time')return d.tat.active&&(_showBearish?!d.tat.dirUp:d.tat.dirUp);
       if(_filter==='sniper')return d.snp.level!=='low'&&(_showBearish?!d.snp.dirUp:d.snp.dirUp);
       if(_filter==='fib618')return _showBearish?false:(d.fib618.confirmed||d.fib618.inZone);
+      if(_filter==='falsebreak')return d.falseBreak.active&&(_showBearish?d.falseBreak.bearish:d.falseBreak.bullish);
       if(_filter==='master')return _showBearish?d.masterScore<=35:d.masterScore>=65;
       if(_filter==='macd')return d.macdX.active&&(_showBearish?!d.macdX.bullish:d.macdX.bullish);
       if(_filter==='instvol')return d.instVol.active&&(_showBearish?d.instVol.bearish:d.instVol.bullish);
@@ -2683,6 +2758,7 @@ function renderResults(){
       case'master':av=a.masterScore;bv=b.masterScore;break;
       case'iv_r':av=a.instVol.volRatio;bv=b.instVol.volRatio;break;
       case'sb_s':av=a.sb.score;bv=b.sb.score;break;
+      case'fb_s':av=a.falseBreak.score;bv=b.falseBreak.score;break;
       default:av=a.masterScore;bv=b.masterScore;
     }
     return((+av||0)>(+bv||0)?1:(+av||0)<(+bv||0)?-1:0)*_sortDir;
@@ -2734,7 +2810,11 @@ function renderResults(){
     }else if(_filter==='hunter'){
       midCols=`<td><span class="scb"><span class="scf" style="width:${d.hunter.score}%;background:${d.hunter.score>=70?'var(--up)':d.hunter.score>=45?'var(--gd)':'var(--dn)'}"></span></span> ${d.hunter.score}%</td><td style="font-family:monospace">${d.hunter.alerts.length}</td><td>${tag(d.hunter.color,d.hunter.sig)}</td>`;
     }else if(_filter==='fib618'){
-      midCols=`<td style="font-family:monospace;font-weight:600">${d.fib618.fibLevel||'—'}</td><td style="font-family:monospace">${d.fib618.distPct!==undefined?d.fib618.distPct+'%':'—'}</td><td>${tag(d.fib618.color,d.fib618.sig)}</td>`;
+      midCols=`<td style="font-family:monospace;font-weight:600">${d.fib618.fibLevel||'—'}${d.fib618.level?' <span style="font-size:9px;color:var(--t3)">('+d.fib618.level+')</span>':''}</td><td style="font-family:monospace">${d.fib618.distPct!==undefined?d.fib618.distPct+'%':'—'}</td><td>${tag(d.fib618.color,d.fib618.sig)}</td>`;
+    }else if(_filter==='falsebreak'){
+      const lvl=d.falseBreak.type==='bull_trap'?d.falseBreak.priorHigh:d.falseBreak.type==='bear_trap'?d.falseBreak.priorLow:'—';
+      const typeTxt=d.falseBreak.type==='bull_trap'?'فخ شرائي 🪤':d.falseBreak.type==='bear_trap'?'فخ بيعي 🪤':'—';
+      midCols=`<td style="font-family:monospace;font-weight:600">${lvl}</td><td>${typeTxt}</td><td>${tag(d.falseBreak.color,d.falseBreak.sig)}</td>`;
     }else if(_filter==='master'){
       const totalAlerts=d.bullAlerts+d.bearAlerts;
       midCols=`<td><span class="scb"><span class="scf" style="width:${d.masterScore}%;background:${d.masterScore>=75?'var(--up)':d.masterScore>=55?'var(--gd)':d.masterScore>=35?'var(--t2)':'var(--dn)'}"></span></span><b style="font-family:monospace">${d.masterScore}</b></td><td style="font-family:monospace">▲${d.bullAlerts} / ▼${d.bearAlerts}</td><td>${tag(d.masterScore>=65?'s4':d.masterScore<=35?'s1':'na',d.masterScore>=65?'فرصة قوية':d.masterScore<=35?'ضعيف':'محايد')}</td>`;
@@ -2760,7 +2840,7 @@ function renderResults(){
       <td style="color:${pcCol};font-family:monospace">${d.pct>=0?'+':''}${d.pct.toFixed(2)}%</td>
       ${midCols}
       <td><span class="scb"><span class="scf" style="width:${d.masterScore}%;background:${d.masterScore>=75?'var(--up)':d.masterScore>=55?'var(--gd)':d.masterScore>=35?'var(--t2)':'var(--dn)'}"></span></span><b>${d.masterScore}</b></td>
-      <td><span class="${d.cls}" style="font-weight:700">${d.sig}</span>${d.tat.sniperBonus?` <span class="tag tag-${d.tat.dirUp?'s4':'s1'}" style="font-size:8px" title="${d.tat.reason}">⏱</span>`:d.tat.penalty?` <span class="tag tag-s1" style="font-size:8px" title="${d.tat.reason}">⚠⏱</span>`:''}${d.snp.level==='high'?` <span class="tag tag-${d.snp.dirUp?'s4':'s1'}" style="font-size:8px;background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.3);color:var(--pu)" title="${d.snp.why}">🎯</span>`:''}${d.fib618.confirmed?` <span class="tag tag-s4" style="font-size:8px;background:rgba(14,207,126,.12);border-color:rgba(14,207,126,.3);color:var(--up)" title="${d.fib618.why}">📐</span>`:''}${d.sb.alert?` <span class="tag tag-s4" style="font-size:8px;background:rgba(45,212,191,.12);border-color:rgba(45,212,191,.3);color:#2dd4bf" title="${d.sb.why}">🐋</span>`:''}</td>
+      <td><span class="${d.cls}" style="font-weight:700">${d.sig}</span>${d.tat.sniperBonus?` <span class="tag tag-${d.tat.dirUp?'s4':'s1'}" style="font-size:8px" title="${d.tat.reason}">⏱</span>`:d.tat.penalty?` <span class="tag tag-s1" style="font-size:8px" title="${d.tat.reason}">⚠⏱</span>`:''}${d.snp.level==='high'?` <span class="tag tag-${d.snp.dirUp?'s4':'s1'}" style="font-size:8px;background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.3);color:var(--pu)" title="${d.snp.why}">🎯</span>`:''}${d.fib618.confirmed?` <span class="tag tag-s4" style="font-size:8px;background:rgba(14,207,126,.12);border-color:rgba(14,207,126,.3);color:var(--up)" title="${d.fib618.why}">📐</span>`:''}${d.sb.alert?` <span class="tag tag-s4" style="font-size:8px;background:rgba(45,212,191,.12);border-color:rgba(45,212,191,.3);color:#2dd4bf" title="${d.sb.why}">🐋</span>`:''}${d.falseBreak.active?` <span class="tag tag-${d.falseBreak.bullish?'s4':'s1'}" style="font-size:8px;background:rgba(240,68,88,.1);border-color:rgba(240,68,88,.3);color:${d.falseBreak.bullish?'var(--up)':'var(--dn)'}" title="${d.falseBreak.why}">🪤</span>`:''}</td>
       <td><button onclick="event.stopPropagation();toggleWhy('${d.sym}')" style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.2);color:var(--pu);padding:1px 8px;border-radius:3px;cursor:pointer;font-size:calc(var(--base-font)*0.75);font-family:inherit">لماذا؟</button></td>
     </tr>
     <tr class="why-row ${_whyOpen[d.sym]?'show':''}" id="why-${d.sym}">
@@ -2786,6 +2866,7 @@ function renderResults(){
           ${d.hunter.alerts.length>0?`<div class="why-item bull"><b>🎪 صيد النسبة:</b> <span class="val">${d.hunter.why}</span></div>`:''}
           ${d.fib618.confirmed||d.fib618.inZone?`<div class="why-item ${d.fib618.confirmed?'bull':'neu'}"><b>📐 ارتداد فيبوناتشي ٦١.٨٪:</b> <span class="val">${d.fib618.why}</span></div>`:''}
           ${d.sb.alert?`<div class="why-item bull"><b>🐋 قاع الحيتان:</b> <span class="val">${d.sb.why}</span></div>`:''}
+          ${d.falseBreak.active?`<div class="why-item ${d.falseBreak.bullish?'bull':'bear'}"><b>🪤 الكسر الوهمي:</b> <span class="val">${d.falseBreak.why}</span></div>`:''}
         </div>
       </td>
     </tr>`;
