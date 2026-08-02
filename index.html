@@ -54,7 +54,8 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
 .resize-handle:hover,.resize-handle.active{background:var(--pu)}
 
 /* Filter tabs */
-.ftabs{display:flex;overflow-x:auto;scrollbar-width:none;border-bottom:2px solid rgba(139,92,246,.15);flex-shrink:0;background:linear-gradient(135deg,rgba(139,92,246,.04),rgba(34,211,238,.02))}
+.ftabs{display:flex;overflow-x:auto;scrollbar-width:none;border-bottom:2px solid rgba(139,92,246,.15);flex-shrink:0;background:linear-gradient(135deg,rgba(139,92,246,.04),rgba(34,211,238,.02));cursor:grab;-webkit-user-select:none;user-select:none}
+.ftabs.dragging{cursor:grabbing;scroll-behavior:auto}
 .ftabs::-webkit-scrollbar{display:none}
 .ftab{padding:7px 12px;cursor:pointer;font-size:10px;color:var(--t2);border-left:1px solid var(--bd);display:flex;align-items:center;gap:4px;white-space:nowrap;position:relative;transition:all .12s;flex-shrink:0}
 .ftab:hover{color:var(--t1);background:rgba(139,92,246,.06)}
@@ -3042,6 +3043,43 @@ document.addEventListener('webkitfullscreenchange',()=>{
   _setExpandBtnLabel(on);
   if(G.lwChart){const ct=document.getElementById('lw-chart');G.lwChart.applyOptions({width:ct.clientWidth,height:ct.clientHeight});}
 });
+
+/* ══ DRAG-TO-SCROLL FOR THE TOP FILTER TABS BAR ══
+   The tabs row scrolls horizontally already (overflow-x:auto), which
+   works fine via native touch-scroll on mobile — but a mouse on a
+   laptop/desktop has no way to pan it (no touch, often no horizontal
+   trackpad gesture either), so it just looks "stuck". This adds
+   click-and-drag panning, like dragging a Trello board. */
+(function initTabsDragScroll(){
+  const el=document.getElementById('ftabs');
+  if(!el)return;
+  let isDown=false,startX=0,startScroll=0,moved=false;
+  el.addEventListener('mousedown',(e)=>{
+    isDown=true;moved=false;
+    startX=e.pageX;startScroll=el.scrollLeft;
+    el.classList.add('dragging');
+  });
+  window.addEventListener('mouseup',()=>{
+    if(!isDown)return;
+    isDown=false;
+    el.classList.remove('dragging');
+    /* swallow the very next click if this was a real drag, so releasing
+       the mouse over a tab after panning doesn't also select that tab */
+    if(moved){
+      const swallow=(e)=>{e.stopPropagation();e.preventDefault();};
+      el.addEventListener('click',swallow,{capture:true,once:true});
+      setTimeout(()=>el.removeEventListener('click',swallow,{capture:true}),0);
+    }
+  });
+  window.addEventListener('mousemove',(e)=>{
+    if(!isDown)return;
+    const dx=e.pageX-startX;
+    if(Math.abs(dx)>4)moved=true;
+    if(moved)e.preventDefault();
+    el.scrollLeft=startScroll-dx;
+  });
+  el.addEventListener('dragstart',(e)=>e.preventDefault()); /* stop native image/text drag ghosting */
+})();
 
 /* ══ PATTERN OVERLAY (Harmonic / Elliott) — draws the actual detected
    structure on the main chart so the user can see its shape, whether or
