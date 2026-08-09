@@ -3931,6 +3931,27 @@ function initIBC(){
   new ResizeObserver(()=>{if(_ibC)_ibC.applyOptions({width:ct.clientWidth,height:w.clientHeight||350});}).observe(w);
 }
 
+function ibProjectionPath(cs,t){
+  /* Purely illustrative — an eased curve from the current close toward
+     TP2, extended a number of bars into the future using the same
+     spacing as the last two real candles. This is a visual cue for
+     "the expected direction/zone", not a price forecast. */
+  if(!cs||cs.length<2||!t)return null;
+  const n=cs.length;
+  const lastC=cs[n-1];
+  const interval=(lastC.time-cs[n-2].time)||86400;
+  const bars=12;
+  const startPrice=lastC.close;
+  const endPrice=t.tp2??t.tp1;
+  if(endPrice==null)return null;
+  const pts=[];
+  for(let i=0;i<=bars;i++){
+    const frac=i/bars;
+    const eased=1-Math.pow(1-frac,2); /* ease-out: quick start, flattens near the target */
+    pts.push({time:lastC.time+Math.round(interval*i),value:startPrice+(endPrice-startPrice)*eased});
+  }
+  return pts;
+}
 function ibSel(sym){
   if(!_ibC)initIBC();if(!_ibC)return;
   const cs=G.cans[sym];if(!cs||!cs.length)return;
@@ -3941,12 +3962,22 @@ function ibSel(sym){
   _ibSr.c.setData(cs.map(c=>({time:c.time,open:c.open,high:c.high,low:c.low,close:c.close})));
   _ibSr.v.setData(cs.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'rgba(14,207,126,.1)':'rgba(240,68,88,.1)'})));
   if(_ibSr._l){_ibSr._l.forEach(l=>{try{_ibSr.c.removePriceLine(l);}catch(e){}});}_ibSr._l=[];
+  if(_ibSr._proj){try{_ibC.removeSeries(_ibSr._proj);}catch(e){}_ibSr._proj=null;}
   _ibSr.c.setMarkers([]);
   if(t){
     const aP=(p,n,c,s)=>{try{_ibSr._l.push(_ibSr.c.createPriceLine({price:p,title:n,color:c,lineWidth:1.5,lineStyle:s||0,axisLabelVisible:true}));}catch(e){}};
     aP(t.entry,'◈ ENTRY','#4a9eff',0);aP(t.sl,'✕ SL','#f04458',2);aP(t.tp1,'✓ TP1','#0ecf7e',0);aP(t.tp2,'✓ TP2','#f5c842',2);aP(t.tp3,'✓ TP3','#a78bfa',2);
     if(t.lq.ab[0])aP(t.lq.ab[0].p,'LIQ↑','rgba(74,158,255,.5)',1);
     if(t.lq.bl[0])aP(t.lq.bl[0].p,'LIQ↓','rgba(74,158,255,.5)',1);
+    /* 👁 التخيلي — الاتجاه المتوقع: منحنى متقطع من السعر الحالي نحو الهدف */
+    const projCol=t.type==='BUY'?'#0ecf7e':'#f04458';
+    const projPts=ibProjectionPath(cs,t);
+    if(projPts){
+      _ibSr._proj=_ibC.addLineSeries({color:projCol,lineWidth:2.5,lineStyle:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+      _ibSr._proj.setData(projPts);
+      const endPt=projPts[projPts.length-1];
+      _ibSr._proj.setMarkers([{time:endPt.time,position:t.type==='BUY'?'aboveBar':'belowBar',color:projCol,shape:t.type==='BUY'?'arrowUp':'arrowDown',text:'👁 الاتجاه المتوقع',size:1.4}]);
+    }
     /* Fractal markers */
     const mk=[],fr=ibFractals(cs,2);
     fr.H.forEach(f=>{f.c=classifyFrac(cs,f,'H',fr);});fr.L.forEach(f=>{f.c=classifyFrac(cs,f,'L',fr);});
@@ -3957,6 +3988,7 @@ function ibSel(sym){
   _ibC.timeScale().fitContent();selectStock(sym);
   document.querySelectorAll('.sc').forEach(c=>{c.style.outline=c.querySelector('.sc-sym')?.textContent===sym?'2px solid #FFD700':'none';});
 }
+
 
 window.addEventListener('load',()=>{
   const CDNs=['https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js','https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.0/lightweight-charts.standalone.production.js'];
