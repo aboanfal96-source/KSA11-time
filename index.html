@@ -343,6 +343,11 @@ body{height:100%;background:var(--c0);color:var(--t1);font-family:'IBM Plex Sans
       <button class="scan-btn scan-sec" id="btn-sell" onclick="toggleBuySell('sell',this)">▼ بيع فقط</button>
       <button class="scan-btn scan-sec" id="btn-alert" onclick="toggleAlertOnly(this)">🔔 إشارات قوية</button>
       <button class="scan-btn scan-sec" id="btn-bearish" onclick="toggleShowBearish(this)" title="يطبق على تبويبات: توافق زمني، قناص ما قبل الانطلاق، ارتداد فيبوناتشي">▲ عرض الصعودي فقط</button>
+      
+      <!-- 🧠💰 النماذج الذكية الجديدة -->
+      <button class="scan-btn scan-sec" id="smart-pred-btn" onclick="handleSmartPrediction()" style="background:rgba(167,139,250,.12)!important;border-color:rgba(167,139,250,.3)!important;color:#a78bfa!important;margin-right:auto">🧠 تنبؤ ذكي</button>
+      <button class="scan-btn scan-sec" id="smart-price-btn" onclick="handleSmartPricing()" style="background:rgba(245,200,66,.12)!important;border-color:rgba(245,200,66,.3)!important;color:#f5c842!important">💰 تسعير ديناميكي</button>
+    </div>
       <div id="scan-prog"><div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div><span class="prog-txt" id="prog-txt"></span></div>
     </div>
 
@@ -4002,9 +4007,24 @@ window.addEventListener('load',()=>{
   }
   tryI();
 });
+
+/* 🧠💰 SMART MODELS FUNCTIONS */
+function handleSmartPrediction(){
+  alert('🧠 التنبؤ الذكي\n\nاختر سهماً من القائمة أولاً ثم اضغط هنا');
+}
+
+function handleSmartPricing(){
+  alert('💰 التسعير الديناميكي\n\nاختر سهماً من القائمة أولاً ثم اضغط هنا');
+}
+
+// تحميل النماذج الذكية
+console.log('%c🚀 TADAWUL PRO Smart Models Ready!', 'color: #0ecf7e; font-weight: bold; font-size: 14px;');
 </script>
-  <script src="/fractal-ai-prediction.js"></script>
+
+<!-- النماذج الذكية الجديدة -->
+<script src="/fractal-ai-prediction.js"></script>
 <script src="/dynamic-pricing-model.js"></script>
-<script src="/activate-models.js"></script>
+<script src="/activate-models-SMART.js"></script>
+
 </body>
 </html>
